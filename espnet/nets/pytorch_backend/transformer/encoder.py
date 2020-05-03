@@ -112,10 +112,10 @@ class Encoder(torch.nn.Module):
             raise ValueError("unknown input_layer: " + input_layer)
         self.normalize_before = normalize_before
         positionwise_layer, positionwise_layer_args = self.get_positionwise_layer(
-            positionwise_layer_type, 
-            attention_dim, 
-            linear_units, 
-            dropout_rate, 
+            positionwise_layer_type,
+            attention_dim,
+            linear_units,
+            dropout_rate,
             positionwise_conv_kernel_size
         )
         self.encoders = repeat(
@@ -133,13 +133,13 @@ class Encoder(torch.nn.Module):
         )
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)
-    
+
     def get_positionwise_layer(
-        self, 
-        positionwise_layer_type="linear", 
-        attention_dim=256, 
-        linear_units=2048, 
-        dropout_rate=0.1, 
+        self,
+        positionwise_layer_type="linear",
+        attention_dim=256,
+        linear_units=2048,
+        dropout_rate=0.1,
         positionwise_conv_kernel_size=1
     ):
         """Define positionwise layer."""
@@ -269,28 +269,27 @@ class EncoderMix(Encoder, torch.nn.Module):
             padding_idx,
         )
         positionwise_layer, positionwise_layer_args = self.get_positionwise_layer(
-            positionwise_layer_type, 
-            attention_dim, 
-            linear_units, 
-            dropout_rate, 
+            positionwise_layer_type,
+            attention_dim,
+            linear_units,
+            dropout_rate,
             positionwise_conv_kernel_size
         )
         self.num_spkrs = num_spkrs
         self.encoders_sd = torch.nn.ModuleList([
-                repeat(
-                    num_blocks_sd,
-                    lambda: EncoderLayer(
-                        attention_dim,
-                        MultiHeadedAttention(
-                            attention_heads, attention_dim, attention_dropout_rate
-                        ),
-                        positionwise_layer(*positionwise_layer_args),
-                        dropout_rate,
-                        normalize_before,
-                        concat_after,
-                    )
-                ) for i in range(num_spkrs)
-            ]
+            repeat(
+                num_blocks_sd,
+                lambda: EncoderLayer(
+                    attention_dim,
+                    MultiHeadedAttention(
+                        attention_heads, attention_dim, attention_dropout_rate
+                    ),
+                    positionwise_layer(*positionwise_layer_args),
+                    dropout_rate,
+                    normalize_before,
+                    concat_after,
+                )
+            ) for i in range(num_spkrs)]
         )
 
     def forward(self, xs, masks):
@@ -327,11 +326,15 @@ class EncoderMix(Encoder, torch.nn.Module):
             xs, masks = self.embed(xs, masks)
         else:
             xs = self.embed(xs)
-        
+
         new_cache_sd = []
         for ns in range(self.num_spkrs):
             if cache is None:
-                cache = [None for _ in range(len(self.encoders_sd) + len(self.encoders_rec))]
+                cache = [
+                    None for _ in range(
+                        len(self.encoders_sd) + len(self.encoders_rec)
+                    )
+                ]
             new_cache = []
             for c, e in zip(cache[:len(self.encoders_sd)], self.encoders_sd[ns]):
                 xs, masks = e(xs, masks, cache=c)

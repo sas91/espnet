@@ -4,7 +4,6 @@
 """Transformer speech recognition model (pytorch)."""
 
 from argparse import Namespace
-from distutils.util import strtobool
 import logging
 import math
 
@@ -36,7 +35,6 @@ from espnet.nets.pytorch_backend.transformer.label_smoothing_loss import (
 from espnet.nets.pytorch_backend.transformer.mask import subsequent_mask
 from espnet.nets.pytorch_backend.transformer.mask import target_mask
 from espnet.nets.pytorch_backend.transformer.plot import PlotAttentionReport
-from espnet.nets.scorers.ctc import CTCPrefixScorer
 
 
 class E2E(ASRInterface, torch.nn.Module):
@@ -81,7 +79,7 @@ class E2E(ASRInterface, torch.nn.Module):
             dropout_rate=args.dropout_rate,
             positional_dropout_rate=args.dropout_rate,
             attention_dropout_rate=args.transformer_attn_dropout_rate,
-            num_spkrs = args.num_spkrs,
+            num_spkrs=args.num_spkrs,
         )
 
         self.decoder = Decoder(
@@ -145,8 +143,8 @@ class E2E(ASRInterface, torch.nn.Module):
 
         :param torch.Tensor xs_pad: batch of padded source sequences (B, Tmax, idim)
         :param torch.Tensor ilens: batch of lengths of source sequences (B)
-        :param torch.Tensor ys_pad: batch of padded target sequences (B, num_spkrs, Lmax)
-        :param torch.Tensor ys_ctc_align_pad: batch of padded forced alignment sequences (B, num_spkrs, Tmax')
+        :param torch.Tensor ys_pad: batch of padded target sequences
+                                    (B, num_spkrs, Lmax)
         :return: ctc loass value
         :rtype: torch.Tensor
         :return: attention loss value
@@ -168,13 +166,14 @@ class E2E(ASRInterface, torch.nn.Module):
         batch_size = xs_pad.size(0)
         ys_pad = ys_pad.transpose(0, 1)  # (num_spkrs, B, Lmax)
         hs_len = [hs_mask[i].view(batch_size, -1).sum(1) for i in range(self.num_spkrs)]
-        loss_ctc_perm = torch.stack([
+        loss_ctc_perm = torch.stack(
+            [
                 self.ctc(
                     hs_pad[i // self.num_spkrs].view(batch_size, -1, self.adim),
                     hs_len[i // self.num_spkrs],
                     ys_pad[i % self.num_spkrs]
                 ) for i in range(self.num_spkrs ** 2)
-            ], 
+            ],
             dim=1,
         )  # (B, num_spkrs^2)
         loss_ctc, min_perm = self.pit.pit_process(loss_ctc_perm)
@@ -209,9 +208,10 @@ class E2E(ASRInterface, torch.nn.Module):
             pred_pad, pred_mask = [None] * self.num_spkrs, [None] * self.num_spkrs
             loss_att, acc = [None] * self.num_spkrs, [None] * self.num_spkrs
             for i in range(self.num_spkrs):
-                pred_pad[i], pred_mask[i], loss_att[i], acc[i] = self.decoder_and_attention(
+                ret = self.decoder_and_attention(
                     hs_pad[i], hs_mask[i], ys_pad[i], batch_size
                 )
+                pred_pad[i], pred_mask[i], loss_att[i], acc[i] = ret[:4]
 
             # 4. compute attention loss
             # The following is just an approximation
@@ -475,7 +475,7 @@ class E2E(ASRInterface, torch.nn.Module):
             # should copy becasuse Namespace will be overwritten globally
             recog_args = Namespace(**vars(recog_args))
             recog_args.minlenratio = max(0.0, recog_args.minlenratio - 0.1)
-            return self.recognize(x, recog_args, char_list, rnnlm)
+            return self.recog(enc_output, recog_args, char_list, rnnlm)
 
         logging.info("total log probability: " + str(nbest_hyps[0]["score"]))
         logging.info(
@@ -500,7 +500,9 @@ class E2E(ASRInterface, torch.nn.Module):
         # Decoder
         nbest_hyps = []
         for enc_out in enc_output:
-            nbest_hyps.append(self.recog(enc_out, recog_args, char_list, rnnlm, use_jit))
+            nbest_hyps.append(
+                self.recog(enc_out, recog_args, char_list, rnnlm, use_jit)
+            )
         return nbest_hyps
 
     def calculate_all_attentions(self, xs_pad, ilens, ys_pad):

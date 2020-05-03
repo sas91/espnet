@@ -115,7 +115,9 @@ class CustomConverter(object):
                 ys_pad += [torch.from_numpy(y).long() for y in ys[i]]
             ys_pad = pad_list(ys_pad, self.ignore_id)
             ys_pad = (
-                ys_pad.view(self.num_spkrs, -1, ys_pad.size(1)).transpose(0, 1).to(device)
+                ys_pad.view(
+                    self.num_spkrs, -1, ys_pad.size(1)
+                ).transpose(0, 1).to(device)
             )  # (B, num_spkrs, Tmax)
         else:
             ys_pad = pad_list(
@@ -253,7 +255,9 @@ def train(args):
     setattr(optimizer, "serialize", lambda s: reporter.serialize(s))
 
     # Setup a converter
-    converter = CustomConverter(subsampling_factor=subsampling_factor, dtype=dtype, num_spkrs=args.num_spkrs)
+    converter = CustomConverter(
+        subsampling_factor=subsampling_factor, dtype=dtype, num_spkrs=args.num_spkrs
+    )
 
     # read json data
     with open(args.train_json, "rb") as f:

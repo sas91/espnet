@@ -14,8 +14,6 @@ import math
 import os
 import sys
 
-import chainer
-from chainer import reporter
 import editdistance
 import numpy as np
 import six
@@ -56,14 +54,16 @@ class PIT(object):
         """Initialize PIT module."""
         self.num_spkrs = num_spkrs
 
-        # [[0, 1], [1, 0]] or [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 1, 0], [2, 0, 1]]
+        # [[0, 1], [1, 0]] or
+        # [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 1, 0], [2, 0, 1]]
         self.perm_choices = []
-        initial_seq = np.linspace(0, num_spkrs-1, num_spkrs, dtype=np.int64)
+        initial_seq = np.linspace(0, num_spkrs - 1, num_spkrs, dtype=np.int64)
         self.permutationDFS(initial_seq, 0)
 
-        # [[0, 3], [1, 2]] or [[0, 4, 8], [0, 5, 7], [1, 3, 8], [1, 5, 6], [2, 4, 6], [2, 3, 7]]
+        # [[0, 3], [1, 2]] or
+        # [[0, 4, 8], [0, 5, 7], [1, 3, 8], [1, 5, 6], [2, 4, 6], [2, 3, 7]]
         self.loss_perm_idx = np.linspace(
-            0, num_spkrs*(num_spkrs-1), num_spkrs, dtype=np.int64
+            0, num_spkrs * (num_spkrs - 1), num_spkrs, dtype=np.int64
         ).reshape(1, num_spkrs)
         self.loss_perm_idx = (self.loss_perm_idx + np.array(self.perm_choices)).tolist()
 
@@ -79,9 +79,9 @@ class PIT(object):
         :rtype List: len=2
 
         """
-        score_perms = torch.stack([torch.sum(loss[loss_perm_idx]) 
-                                   for loss_perm_idx in self.loss_perm_idx]
-                                 ) / self.num_spkrs
+        score_perms = torch.stack(
+            [torch.sum(loss[loss_perm_idx]) for loss_perm_idx in self.loss_perm_idx]
+        ) / self.num_spkrs
         perm_loss, min_idx = torch.min(score_perms, 0)
         permutation = self.perm_choices[min_idx]
         return perm_loss, permutation
@@ -102,7 +102,7 @@ class PIT(object):
         loss_perm = torch.stack([r[0] for r in ret], dim=0).to(losses.device)  # (B)
         permutation = torch.tensor([r[1] for r in ret]).long().to(losses.device)
         return torch.mean(loss_perm), permutation
-    
+
     def permutationDFS(self, source, start):
         """Get permutations with DFS
            Stores the results in res: permuted orders
@@ -370,7 +370,9 @@ class E2E(E2E_ASR, ASRInterface, torch.nn.Module):
                     y_hat = [x[0] for x in groupby(y)]
                     y_true = ys_pad[ns][i]
 
-                    seq_hat = [self.char_list[int(idx)] for idx in y_hat if int(idx) != -1]
+                    seq_hat = [
+                        self.char_list[int(idx)] for idx in y_hat if int(idx) != -1
+                    ]
                     seq_true = [
                         self.char_list[int(idx)] for idx in y_true if int(idx) != -1
                     ]
@@ -491,7 +493,9 @@ class E2E(E2E_ASR, ASRInterface, torch.nn.Module):
 
         loss_data = float(self.loss)
         if loss_data < CTC_LOSS_THRESHOLD and not math.isnan(loss_data):
-            self.reporter.report(loss_ctc_data, loss_att_data, self.acc, cer_ctc, cer, wer, loss_data)
+            self.reporter.report(
+                loss_ctc_data, loss_att_data, self.acc, cer_ctc, cer, wer, loss_data
+            )
         else:
             logging.warning("loss (=%f) is not correct", loss_data)
         return self.loss
