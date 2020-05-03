@@ -116,7 +116,7 @@ class Encoder(torch.nn.Module):
             attention_dim,
             linear_units,
             dropout_rate,
-            positionwise_conv_kernel_size
+            positionwise_conv_kernel_size,
         )
         self.encoders = repeat(
             num_blocks,
@@ -140,7 +140,7 @@ class Encoder(torch.nn.Module):
         attention_dim=256,
         linear_units=2048,
         dropout_rate=0.1,
-        positionwise_conv_kernel_size=1
+        positionwise_conv_kernel_size=1,
     ):
         """Define positionwise layer."""
         if positionwise_layer_type == "linear":
@@ -273,23 +273,26 @@ class EncoderMix(Encoder, torch.nn.Module):
             attention_dim,
             linear_units,
             dropout_rate,
-            positionwise_conv_kernel_size
+            positionwise_conv_kernel_size,
         )
         self.num_spkrs = num_spkrs
-        self.encoders_sd = torch.nn.ModuleList([
-            repeat(
-                num_blocks_sd,
-                lambda: EncoderLayer(
-                    attention_dim,
-                    MultiHeadedAttention(
-                        attention_heads, attention_dim, attention_dropout_rate
+        self.encoders_sd = torch.nn.ModuleList(
+            [
+                repeat(
+                    num_blocks_sd,
+                    lambda: EncoderLayer(
+                        attention_dim,
+                        MultiHeadedAttention(
+                            attention_heads, attention_dim, attention_dropout_rate
+                        ),
+                        positionwise_layer(*positionwise_layer_args),
+                        dropout_rate,
+                        normalize_before,
+                        concat_after,
                     ),
-                    positionwise_layer(*positionwise_layer_args),
-                    dropout_rate,
-                    normalize_before,
-                    concat_after,
                 )
-            ) for i in range(num_spkrs)]
+                for i in range(num_spkrs)
+            ]
         )
 
     def forward(self, xs, masks):
@@ -331,15 +334,13 @@ class EncoderMix(Encoder, torch.nn.Module):
         for ns in range(self.num_spkrs):
             if cache is None:
                 cache = [
-                    None for _ in range(
-                        len(self.encoders_sd) + len(self.encoders_rec)
-                    )
+                    None for _ in range(len(self.encoders_sd) + len(self.encoders_rec))
                 ]
             new_cache = []
-            for c, e in zip(cache[:len(self.encoders_sd)], self.encoders_sd[ns]):
+            for c, e in zip(cache[: len(self.encoders_sd)], self.encoders_sd[ns]):
                 xs, masks = e(xs, masks, cache=c)
                 new_cache.append(xs)
-            for c, e in zip(cache[:len(self.encoders_sd):], self.encoders_rec):
+            for c, e in zip(cache[: len(self.encoders_sd) :], self.encoders_rec):
                 xs, masks = e(xs, masks, cache=c)
                 new_cache.append(xs)
             new_cache_sd.append(new_cache)

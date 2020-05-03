@@ -171,13 +171,14 @@ class E2E(ASRInterface, torch.nn.Module):
                 self.ctc(
                     hs_pad[i // self.num_spkrs].view(batch_size, -1, self.adim),
                     hs_len[i // self.num_spkrs],
-                    ys_pad[i % self.num_spkrs]
-                ) for i in range(self.num_spkrs ** 2)
+                    ys_pad[i % self.num_spkrs],
+                )
+                for i in range(self.num_spkrs ** 2)
             ],
             dim=1,
         )  # (B, num_spkrs^2)
         loss_ctc, min_perm = self.pit.pit_process(loss_ctc_perm)
-        logging.info('ctc loss:' + str(float(loss_ctc)))
+        logging.info("ctc loss:" + str(float(loss_ctc)))
 
         # Permute the labels according to loss
         for b in range(batch_size):  # B
@@ -195,9 +196,9 @@ class E2E(ASRInterface, torch.nn.Module):
                 cer_ctc.append(
                     self.error_calculator(ys_hat.cpu(), ys_pad[i].cpu(), is_ctc=True)
                 )
-            cer_ctc = sum(
-                map(lambda x: x[0] * x[1], zip(cer_ctc, ys_out_len))
-            ) / sum(ys_out_len)
+            cer_ctc = sum(map(lambda x: x[0] * x[1], zip(cer_ctc, ys_out_len))) / sum(
+                ys_out_len
+            )
         else:
             cer_ctc = None
 
@@ -208,19 +209,23 @@ class E2E(ASRInterface, torch.nn.Module):
             pred_pad, pred_mask = [None] * self.num_spkrs, [None] * self.num_spkrs
             loss_att, acc = [None] * self.num_spkrs, [None] * self.num_spkrs
             for i in range(self.num_spkrs):
-                ret = self.decoder_and_attention(
+                (
+                    pred_pad[i],
+                    pred_mask[i],
+                    loss_att[i],
+                    acc[i],
+                ) = self.decoder_and_attention(
                     hs_pad[i], hs_mask[i], ys_pad[i], batch_size
                 )
-                pred_pad[i], pred_mask[i], loss_att[i], acc[i] = ret[:4]
 
             # 4. compute attention loss
             # The following is just an approximation
-            loss_att = sum(
-                map(lambda x: x[0] * x[1], zip(loss_att, ys_out_len))
-            ) / sum(ys_out_len)
-            self.acc = sum(
-                map(lambda x: x[0] * x[1], zip(acc, ys_out_len))
-            ) / sum(ys_out_len)
+            loss_att = sum(map(lambda x: x[0] * x[1], zip(loss_att, ys_out_len))) / sum(
+                ys_out_len
+            )
+            self.acc = sum(map(lambda x: x[0] * x[1], zip(acc, ys_out_len))) / sum(
+                ys_out_len
+            )
 
             # 5. compute cer/wer
             if self.training or self.error_calculator is None:

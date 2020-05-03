@@ -79,9 +79,12 @@ class PIT(object):
         :rtype List: len=2
 
         """
-        score_perms = torch.stack(
-            [torch.sum(loss[loss_perm_idx]) for loss_perm_idx in self.loss_perm_idx]
-        ) / self.num_spkrs
+        score_perms = (
+            torch.stack(
+                [torch.sum(loss[loss_perm_idx]) for loss_perm_idx in self.loss_perm_idx]
+            )
+            / self.num_spkrs
+        )
         perm_loss, min_idx = torch.min(score_perms, 0)
         permutation = self.perm_choices[min_idx]
         return perm_loss, permutation

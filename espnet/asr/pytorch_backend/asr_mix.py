@@ -80,7 +80,7 @@ class CustomConverter(object):
         """
         # batch should be located in list
         assert len(batch) == 1
-        xs, ys = batch[0][0], batch[0][-self.num_spkrs:]
+        xs, ys = batch[0][0], batch[0][-self.num_spkrs :]
 
         # perform subsampling
         if self.subsampling_factor > 1:
@@ -115,9 +115,9 @@ class CustomConverter(object):
                 ys_pad += [torch.from_numpy(y).long() for y in ys[i]]
             ys_pad = pad_list(ys_pad, self.ignore_id)
             ys_pad = (
-                ys_pad.view(
-                    self.num_spkrs, -1, ys_pad.size(1)
-                ).transpose(0, 1).to(device)
+                ys_pad.view(self.num_spkrs, -1, ys_pad.size(1))
+                .transpose(0, 1)
+                .to(device)
             )  # (B, num_spkrs, Tmax)
         else:
             ys_pad = pad_list(

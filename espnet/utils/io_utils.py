@@ -248,8 +248,10 @@ class LoadInputsAndTargets(object):
 
             # Keeping x_name and y_name, e.g. input1, for future extension
             return_batch = OrderedDict(
-                [*[(x_name, x) for x_name, x in zip(x_names, xs)],
-                 *[(y_name, y) for y_name, y in zip(y_names, ys)]]
+                [
+                    *[(x_name, x) for x_name, x in zip(x_names, xs)],
+                    *[(y_name, y) for y_name, y in zip(y_names, ys)],
+                ]
             )
         else:
             return_batch = OrderedDict([(x_name, x) for x_name, x in zip(x_names, xs)])
