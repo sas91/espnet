@@ -108,6 +108,8 @@ class PIT(object):
 
     def permutationDFS(self, source, start):
         """Get permutations with DFS.
+
+           The final result is all permutations of the 'source' sequence.
            e.g. [[1, 2], [2, 1]] or
                 [[1, 2, 3], [1, 3, 2], [2, 1, 3], [2, 3, 1], [3, 2, 1], [3, 1, 2]]
 
