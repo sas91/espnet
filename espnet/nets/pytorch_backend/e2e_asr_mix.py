@@ -23,13 +23,14 @@ from espnet.nets.asr_interface import ASRInterface
 from espnet.nets.e2e_asr_common import get_vgg2l_odim
 from espnet.nets.e2e_asr_common import label_smoothing_dist
 from espnet.nets.pytorch_backend.ctc import ctc_for
-from espnet.nets.pytorch_backend.e2e_asr import E2E as E2E_ASR
+from espnet.nets.pytorch_backend.e2e_asr import E2E as E2EASR
 from espnet.nets.pytorch_backend.e2e_asr import Reporter
 from espnet.nets.pytorch_backend.frontends.feature_transform import (
     feature_transform_for,  # noqa: H301
 )
 from espnet.nets.pytorch_backend.frontends.frontend import frontend_for
-
+from espnet.nets.pytorch_backend.initialization import lecun_normal_init_parameters
+from espnet.nets.pytorch_backend.initialization import set_forget_bias_to_one
 from espnet.nets.pytorch_backend.nets_utils import get_subsample
 from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
 from espnet.nets.pytorch_backend.nets_utils import pad_list
@@ -127,7 +128,7 @@ class PIT(object):
             source[start], source[i] = source[i], source[start]
 
 
-class E2E(E2E_ASR, ASRInterface, torch.nn.Module):
+class E2E(ASRInterface, torch.nn.Module):
     """E2E module.
 
     :param int idim: dimension of inputs
@@ -138,10 +139,10 @@ class E2E(E2E_ASR, ASRInterface, torch.nn.Module):
     @staticmethod
     def add_arguments(parser):
         """Add arguments."""
-        E2E.encoder_add_arguments(parser)
+        E2EASR.encoder_add_arguments(parser)
         E2E.encoder_mix_add_arguments(parser)
-        E2E.attention_add_arguments(parser)
-        E2E.decoder_add_arguments(parser)
+        E2EASR.attention_add_arguments(parser)
+        E2EASR.decoder_add_arguments(parser)
         return parser
 
     @staticmethod
@@ -166,13 +167,18 @@ class E2E(E2E_ASR, ASRInterface, torch.nn.Module):
 
     def __init__(self, idim, odim, args):
         """Initialize multi-speaker E2E module."""
+        super(E2E, self).__init__()
         torch.nn.Module.__init__(self)
         self.mtlalpha = args.mtlalpha
         assert 0.0 <= self.mtlalpha <= 1.0, "mtlalpha should be [0.0, 1.0]"
         self.etype = args.etype
         self.verbose = args.verbose
+        # NOTE: for self.build method
+        args.char_list = getattr(args, "char_list", None)
         self.char_list = args.char_list
         self.outdir = args.outdir
+        self.space = args.sym_space
+        self.blank = args.sym_blank
         self.reporter = Reporter()
         self.num_spkrs = args.num_spkrs
         self.spa = args.spa
@@ -252,33 +258,6 @@ class E2E(E2E_ASR, ASRInterface, torch.nn.Module):
         - EmbedID.W ~ Normal(0, 1)
         - LSTM.upward.b[forget_gate_range] = 1 (but not used in NStepLSTM)
         """
-
-        def lecun_normal_init_parameters(module):
-            for p in module.parameters():
-                data = p.data
-                if data.dim() == 1:
-                    # bias
-                    data.zero_()
-                elif data.dim() == 2:
-                    # linear weight
-                    n = data.size(1)
-                    stdv = 1.0 / math.sqrt(n)
-                    data.normal_(0, stdv)
-                elif data.dim() == 4:
-                    # conv weight
-                    n = data.size(1)
-                    for k in data.size()[2:]:
-                        n *= k
-                    stdv = 1.0 / math.sqrt(n)
-                    data.normal_(0, stdv)
-                else:
-                    raise NotImplementedError
-
-        def set_forget_bias_to_one(bias):
-            n = bias.size(0)
-            start, end = n // 4, n // 2
-            bias.data[start:end].fill_(1.0)
-
         lecun_normal_init_parameters(self)
         # exceptions
         # embed weight ~ Normal(0, 1)
