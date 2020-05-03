@@ -17,8 +17,8 @@ from espnet.nets.e2e_asr_common import ErrorCalculator
 from espnet.nets.pytorch_backend.ctc import CTC
 from espnet.nets.pytorch_backend.e2e_asr import CTC_LOSS_THRESHOLD
 from espnet.nets.pytorch_backend.e2e_asr import Reporter
-from espnet.nets.pytorch_backend.e2e_asr_mix import PIT
 from espnet.nets.pytorch_backend.e2e_asr_mix import E2E as E2EASRMIX
+from espnet.nets.pytorch_backend.e2e_asr_mix import PIT
 from espnet.nets.pytorch_backend.e2e_asr_transformer import E2E as E2EASR
 from espnet.nets.pytorch_backend.nets_utils import get_subsample
 from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
@@ -259,7 +259,7 @@ class E2E(ASRInterface, torch.nn.Module):
         return self.loss
 
     def decoder_and_attention(self, hs_pad, hs_mask, ys_pad, batch_size):
-        """forward decoder and attention loss."""
+        """Forward decoder and attention loss."""
         # forward decoder
         ys_in_pad, ys_out_pad = add_sos_eos(ys_pad, self.sos, self.eos, self.ignore_id)
         ys_mask = target_mask(ys_in_pad, self.ignore_id)

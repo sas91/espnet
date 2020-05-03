@@ -107,10 +107,10 @@ class PIT(object):
         return torch.mean(loss_perm), permutation
 
     def permutationDFS(self, source, start):
-        """Get permutations with DFS
-           Stores the results in res: permuted orders
+        """Get permutations with DFS.
            e.g. [[1, 2], [2, 1]] or
                 [[1, 2, 3], [1, 3, 2], [2, 1, 3], [2, 3, 1], [3, 2, 1], [3, 1, 2]]
+
         :param np.ndarray source: (num_spkrs, 1), e.g. [1, 2, ..., N]
         :param int start: the start point to permute
 
