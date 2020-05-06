@@ -13,31 +13,24 @@ import torch
 from espnet.nets.asr_interface import ASRInterface
 from espnet.nets.ctc_prefix_score import CTCPrefixScore
 from espnet.nets.e2e_asr_common import end_detect
-from espnet.nets.e2e_asr_common import ErrorCalculator
 from espnet.nets.pytorch_backend.ctc import CTC
 from espnet.nets.pytorch_backend.e2e_asr import CTC_LOSS_THRESHOLD
 from espnet.nets.pytorch_backend.e2e_asr import Reporter
 from espnet.nets.pytorch_backend.e2e_asr_mix import E2E as E2EASRMIX
 from espnet.nets.pytorch_backend.e2e_asr_mix import PIT
 from espnet.nets.pytorch_backend.e2e_asr_transformer import E2E as E2EASR
-from espnet.nets.pytorch_backend.nets_utils import get_subsample
 from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
 from espnet.nets.pytorch_backend.nets_utils import th_accuracy
 from espnet.nets.pytorch_backend.rnn.decoders import CTC_SCORING_RATIO
 from espnet.nets.pytorch_backend.transformer.add_sos_eos import add_sos_eos
-from espnet.nets.pytorch_backend.transformer.attention import MultiHeadedAttention
 from espnet.nets.pytorch_backend.transformer.decoder import Decoder
-from espnet.nets.pytorch_backend.transformer.encoder import EncoderMix
+from espnet.nets.pytorch_backend.transformer.encoder_mix import EncoderMix
 from espnet.nets.pytorch_backend.transformer.initializer import initialize
-from espnet.nets.pytorch_backend.transformer.label_smoothing_loss import (
-    LabelSmoothingLoss,  # noqa: H301
-)
 from espnet.nets.pytorch_backend.transformer.mask import subsequent_mask
 from espnet.nets.pytorch_backend.transformer.mask import target_mask
-from espnet.nets.pytorch_backend.transformer.plot import PlotAttentionReport
 
 
-class E2E(ASRInterface, torch.nn.Module):
+class E2E(E2EASR, ASRInterface, torch.nn.Module):
     """E2E module.
 
     :param int idim: dimension of inputs
@@ -53,11 +46,6 @@ class E2E(ASRInterface, torch.nn.Module):
         E2EASRMIX.encoder_mix_add_arguments(parser)
         return parser
 
-    @property
-    def attention_plot_class(self):
-        """Return PlotAttentionReport."""
-        return PlotAttentionReport
-
     def __init__(self, idim, odim, args, ignore_id=-1):
         """Construct an E2E object.
 
@@ -65,7 +53,7 @@ class E2E(ASRInterface, torch.nn.Module):
         :param int odim: dimension of outputs
         :param Namespace args: argument Namespace containing options
         """
-        torch.nn.Module.__init__(self)
+        super(E2E, self).__init__(idim, odim, args, ignore_id=-1)
         if args.transformer_attn_dropout_rate is None:
             args.transformer_attn_dropout_rate = args.dropout_rate
         self.encoder = EncoderMix(
@@ -82,35 +70,6 @@ class E2E(ASRInterface, torch.nn.Module):
             num_spkrs=args.num_spkrs,
         )
 
-        self.decoder = Decoder(
-            odim=odim,
-            attention_dim=args.adim,
-            attention_heads=args.aheads,
-            linear_units=args.dunits,
-            num_blocks=args.dlayers,
-            dropout_rate=args.dropout_rate,
-            positional_dropout_rate=args.dropout_rate,
-            self_attention_dropout_rate=args.transformer_attn_dropout_rate,
-            src_attention_dropout_rate=args.transformer_attn_dropout_rate,
-        )
-        self.sos = odim - 1
-        self.eos = odim - 1
-        self.odim = odim
-        self.ignore_id = ignore_id
-        self.subsample = get_subsample(args, mode="asr", arch="transformer")
-        self.reporter = Reporter()
-
-        # self.lsm_weight = a
-        self.criterion = LabelSmoothingLoss(
-            self.odim,
-            self.ignore_id,
-            args.lsm_weight,
-            args.transformer_length_normalized_loss,
-        )
-        # self.verbose = args.verbose
-        self.reset_parameters(args)
-        self.adim = args.adim
-        self.mtlalpha = args.mtlalpha
         if args.mtlalpha > 0.0:
             self.ctc = CTC(
                 odim, args.adim, args.dropout_rate, ctc_type=args.ctc_type, reduce=False
@@ -118,25 +77,8 @@ class E2E(ASRInterface, torch.nn.Module):
         else:
             self.ctc = None
 
-        if args.report_cer or args.report_wer:
-            self.error_calculator = ErrorCalculator(
-                args.char_list,
-                args.sym_space,
-                args.sym_blank,
-                args.report_cer,
-                args.report_wer,
-            )
-        else:
-            self.error_calculator = None
-        self.rnnlm = None
-
         self.num_spkrs = args.num_spkrs
         self.pit = PIT(self.num_spkrs)
-
-    def reset_parameters(self, args):
-        """Initialize parameters."""
-        # initialize parameters
-        initialize(self, args.transformer_init)
 
     def forward(self, xs_pad, ilens, ys_pad):
         """E2E forward.
@@ -509,22 +451,3 @@ class E2E(ASRInterface, torch.nn.Module):
                 self.recog(enc_out, recog_args, char_list, rnnlm, use_jit)
             )
         return nbest_hyps
-
-    def calculate_all_attentions(self, xs_pad, ilens, ys_pad):
-        """E2E attention calculation.
-
-        :param torch.Tensor xs_pad: batch of padded input sequences (B, Tmax, idim)
-        :param torch.Tensor ilens: batch of lengths of input sequences (B)
-        :param torch.Tensor ys_pad: batch of padded token id sequence tensor (B, Lmax)
-        :return: attention weights with the following shape,
-            1) multi-head case => attention weights (B, H, Lmax, Tmax),
-            2) other case => attention weights (B, Lmax, Tmax).
-        :rtype: float ndarray
-        """
-        with torch.no_grad():
-            self.forward(xs_pad, ilens, ys_pad)
-        ret = dict()
-        for name, m in self.named_modules():
-            if isinstance(m, MultiHeadedAttention):
-                ret[name] = m.attn.cpu().numpy()
-        return ret
