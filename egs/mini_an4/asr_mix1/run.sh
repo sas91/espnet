@@ -21,8 +21,9 @@ resume=        # Resume the training from snapshot
 # feature configuration
 do_delta=false
 
+num_spkrs=2
+
 train_config=conf/train.yaml
-train_config2=conf/train_multispkr.yaml
 preprocess_config=conf/preprocess.yaml
 lm_config=conf/lm.yaml
 decode_config=conf/decode.yaml
@@ -230,7 +231,6 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
     ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
         asr_train.py \
         --config ${train_config} \
-        --config2 ${train_config2} \
         --preprocess-conf ${preprocess_config} \
         --ngpu ${ngpu} \
         --backend ${backend} \
@@ -244,7 +244,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
         --resume ${resume} \
         --train-json ${feat_tr_dir}/data_${bpemode}${nbpe}.json \
         --valid-json ${feat_dt_dir}/data_${bpemode}${nbpe}.json \
-        --etype vggblstmp
+        --num-spkrs ${num_spkrs}
 fi
 
 if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
@@ -259,6 +259,9 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             recog_opts="--word-rnnlm ${lmexpdir}/rnnlm.model.best"
         else
             recog_opts="--rnnlm ${lmexpdir}/rnnlm.model.best"
+        fi
+        if [[ $(get_yaml.py ${train_config} model-module) = *transformer* ]]; then
+            recog_opts=${recog_opts}" --batchsize 0"
         fi
         feat_recog_dir=${dumpdir}/${rtask}/delta${do_delta}
 
