@@ -62,21 +62,22 @@ class EncoderMix(Encoder, torch.nn.Module):
     ):
         """Construct an Encoder object."""
         super(EncoderMix, self).__init__(
-            idim,
-            attention_dim,
-            attention_heads,
-            linear_units,
-            num_blocks_rec,
-            dropout_rate,
-            positional_dropout_rate,
-            attention_dropout_rate,
-            input_layer,
-            pos_enc_class,
-            normalize_before,
-            concat_after,
-            positionwise_layer_type,
-            positionwise_conv_kernel_size,
-            padding_idx,
+            idim=idim,
+            selfattention_layer_type="selfattn",
+            attention_dim=attention_dim,
+            attention_heads=attention_heads,
+            linear_units=linear_units,
+            num_blocks=num_blocks_rec,
+            dropout_rate=dropout_rate,
+            positional_dropout_rate=positional_dropout_rate,
+            attention_dropout_rate=attention_dropout_rate,
+            input_layer=input_layer,
+            pos_enc_class=pos_enc_class,
+            normalize_before=normalize_before,
+            concat_after=concat_after,
+            positionwise_layer_type=positionwise_layer_type,
+            positionwise_conv_kernel_size=positionwise_conv_kernel_size,
+            padding_idx=padding_idx,
         )
         positionwise_layer, positionwise_layer_args = self.get_positionwise_layer(
             positionwise_layer_type,
@@ -90,7 +91,7 @@ class EncoderMix(Encoder, torch.nn.Module):
             [
                 repeat(
                     num_blocks_sd,
-                    lambda: EncoderLayer(
+                    lambda lnum: EncoderLayer(
                         attention_dim,
                         MultiHeadedAttention(
                             attention_heads, attention_dim, attention_dropout_rate
