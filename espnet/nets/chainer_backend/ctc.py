@@ -1,13 +1,10 @@
 import logging
 
 import chainer
+from chainer import cuda
 import chainer.functions as F
 import chainer.links as L
 import numpy as np
-
-from chainer import cuda
-
-from espnet.nets.chainer_backend.nets_utils import linear_tensor
 
 
 class CTC(chainer.Chain):
@@ -32,8 +29,10 @@ class CTC(chainer.Chain):
         """CTC forward.
 
         Args:
-            hs (list of chainer.Variable | N-dimension array): Input variable from encoder.
-            ys (list of chainer.Variable | N-dimension array): Input variable of decoder.
+            hs (list of chainer.Variable | N-dimension array):
+                Input variable from encoder.
+            ys (list of chainer.Variable | N-dimension array):
+                Input variable of decoder.
 
         Returns:
             chainer.Variable: A variable holding a scalar value of the CTC loss.
@@ -44,8 +43,9 @@ class CTC(chainer.Chain):
         olens = [x.shape[0] for x in ys]
 
         # zero padding for hs
-        y_hat = linear_tensor(self.ctc_lo, F.dropout(
-            F.pad_sequence(hs), ratio=self.dropout_rate))
+        y_hat = self.ctc_lo(
+            F.dropout(F.pad_sequence(hs), ratio=self.dropout_rate), n_batch_axes=2
+        )
         y_hat = F.separate(y_hat, axis=1)  # ilen list of batch x hdim
 
         # zero padding for ys
@@ -54,13 +54,18 @@ class CTC(chainer.Chain):
         # get length info
         input_length = chainer.Variable(self.xp.array(ilens, dtype=np.int32))
         label_length = chainer.Variable(self.xp.array(olens, dtype=np.int32))
-        logging.info(self.__class__.__name__ + ' input lengths:  ' + str(input_length.data))
-        logging.info(self.__class__.__name__ + ' output lengths: ' + str(label_length.data))
+        logging.info(
+            self.__class__.__name__ + " input lengths:  " + str(input_length.data)
+        )
+        logging.info(
+            self.__class__.__name__ + " output lengths: " + str(label_length.data)
+        )
 
         # get ctc loss
         self.loss = F.connectionist_temporal_classification(
-            y_hat, y_true, 0, input_length, label_length)
-        logging.info('ctc loss:' + str(self.loss.data))
+            y_hat, y_true, 0, input_length, label_length
+        )
+        logging.info("ctc loss:" + str(self.loss.data))
 
         return self.loss
 
@@ -68,13 +73,14 @@ class CTC(chainer.Chain):
         """Log_softmax of frame activations.
 
         Args:
-            hs (list of chainer.Variable | N-dimension array): Input variable from encoder.
+            hs (list of chainer.Variable | N-dimension array):
+                Input variable from encoder.
 
         Returns:
             chainer.Variable: A n-dimension float array.
 
         """
-        y_hat = linear_tensor(self.ctc_lo, F.pad_sequence(hs))
+        y_hat = self.ctc_lo(F.pad_sequence(hs), n_batch_axes=2)
         return F.log_softmax(y_hat.reshape(-1, y_hat.shape[-1])).reshape(y_hat.shape)
 
 
@@ -100,8 +106,10 @@ class WarpCTC(chainer.Chain):
         """Core function of the Warp-CTC layer.
 
         Args:
-            hs (iterable of chainer.Variable | N-dimention array): Input variable from encoder.
-            ys (iterable of chainer.Variable | N-dimension array): Input variable of decoder.
+            hs (iterable of chainer.Variable | N-dimention array):
+                Input variable from encoder.
+            ys (iterable of chainer.Variable | N-dimension array):
+                Input variable of decoder.
 
         Returns:
            chainer.Variable: A variable holding a scalar value of the CTC loss.
@@ -112,18 +120,20 @@ class WarpCTC(chainer.Chain):
         olens = [x.shape[0] for x in ys]
 
         # zero padding for hs
-        y_hat = linear_tensor(self.ctc_lo, F.dropout(
-            F.pad_sequence(hs), ratio=self.dropout_rate))
-        y_hat = F.transpose(y_hat, (1, 0, 2))  # batch x frames x hdim
+        y_hat = self.ctc_lo(
+            F.dropout(F.pad_sequence(hs), ratio=self.dropout_rate), n_batch_axes=2
+        )
+        y_hat = y_hat.transpose(1, 0, 2)  # batch x frames x hdim
 
         # get length info
-        logging.info(self.__class__.__name__ + ' input lengths:  ' + str(ilens))
-        logging.info(self.__class__.__name__ + ' output lengths: ' + str(olens))
+        logging.info(self.__class__.__name__ + " input lengths:  " + str(ilens))
+        logging.info(self.__class__.__name__ + " output lengths: " + str(olens))
 
         # get ctc loss
         from chainer_ctc.warpctc import ctc as warp_ctc
+
         self.loss = warp_ctc(y_hat, ilens, [cuda.to_cpu(l.data) for l in ys])[0]
-        logging.info('ctc loss:' + str(self.loss.data))
+        logging.info("ctc loss:" + str(self.loss.data))
 
         return self.loss
 
@@ -131,13 +141,14 @@ class WarpCTC(chainer.Chain):
         """Log_softmax of frame activations.
 
         Args:
-            hs (list of chainer.Variable | N-dimension array): Input variable from encoder.
+            hs (list of chainer.Variable | N-dimension array):
+                Input variable from encoder.
 
         Returns:
             chainer.Variable: A n-dimension float array.
 
         """
-        y_hat = linear_tensor(self.ctc_lo, F.pad_sequence(hs))
+        y_hat = self.ctc_lo(F.pad_sequence(hs), n_batch_axes=2)
         return F.log_softmax(y_hat.reshape(-1, y_hat.shape[-1])).reshape(y_hat.shape)
 
     def argmax(self, hs_pad):
@@ -162,13 +173,12 @@ def ctc_for(args, odim):
 
     """
     ctc_type = args.ctc_type
-    if ctc_type == 'builtin':
+    if ctc_type == "builtin":
         logging.info("Using chainer CTC implementation")
         ctc = CTC(odim, args.eprojs, args.dropout_rate)
-    elif ctc_type == 'warpctc':
+    elif ctc_type == "warpctc":
         logging.info("Using warpctc CTC implementation")
         ctc = WarpCTC(odim, args.eprojs, args.dropout_rate)
     else:
-        raise ValueError('ctc_type must be "builtin" or "warpctc": {}'
-                         .format(ctc_type))
+        raise ValueError('ctc_type must be "builtin" or "warpctc": {}'.format(ctc_type))
     return ctc

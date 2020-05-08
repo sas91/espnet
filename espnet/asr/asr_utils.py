@@ -7,6 +7,7 @@ import argparse
 import copy
 import json
 import logging
+
 # matplotlib related
 import os
 import shutil
@@ -25,7 +26,8 @@ from chainer.serializers.npz import NpzDeserializer
 import matplotlib
 import numpy as np
 import torch
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 
 
 # * -------------------- training iterator related -------------------- *
@@ -41,7 +43,7 @@ class CompareValueTrigger(object):
 
     """
 
-    def __init__(self, key, compare_fn, trigger=(1, 'epoch')):
+    def __init__(self, key, compare_fn, trigger=(1, "epoch")):
         self._key = key
         self._best_value = None
         self._interval_trigger = training.util.get_trigger(trigger)
@@ -91,11 +93,24 @@ class PlotAttentionReport(extension.Extension):
         ikey (str): Key to access input (for ASR ikey="input", for MT ikey="output".)
         iaxis (int): Dimension to access input (for ASR iaxis=0, for MT iaxis=1.)
         okey (str): Key to access output (for ASR okey="input", MT okay="output".)
+        oaxis (int): Dimension to access output (for ASR oaxis=0, for MT oaxis=0.)
 
     """
 
-    def __init__(self, att_vis_fn, data, outdir, converter, transform, device, reverse=False,
-                 ikey="input", iaxis=0, okey="output", oaxis=0):
+    def __init__(
+        self,
+        att_vis_fn,
+        data,
+        outdir,
+        converter,
+        transform,
+        device,
+        reverse=False,
+        ikey="input",
+        iaxis=0,
+        okey="output",
+        oaxis=0,
+    ):
         self.att_vis_fn = att_vis_fn
         self.data = copy.deepcopy(data)
         self.outdir = outdir
@@ -113,20 +128,79 @@ class PlotAttentionReport(extension.Extension):
     def __call__(self, trainer):
         """Plot and save image file of att_ws matrix."""
         att_ws = self.get_attention_weights()
-        for idx, att_w in enumerate(att_ws):
-            filename = "%s/%s.ep.{.updater.epoch}.png" % (
-                self.outdir, self.data[idx][0])
-            att_w = self.get_attention_weight(idx, att_w)
-            self._plot_and_save_attention(att_w, filename.format(trainer))
+        if isinstance(att_ws, list):  # multi-encoder case
+            num_encs = len(att_ws) - 1
+            # atts
+            for i in range(num_encs):
+                for idx, att_w in enumerate(att_ws[i]):
+                    filename = "%s/%s.ep.{.updater.epoch}.att%d.png" % (
+                        self.outdir,
+                        self.data[idx][0],
+                        i + 1,
+                    )
+                    att_w = self.get_attention_weight(idx, att_w)
+                    np_filename = "%s/%s.ep.{.updater.epoch}.att%d.npy" % (
+                        self.outdir,
+                        self.data[idx][0],
+                        i + 1,
+                    )
+                    np.save(np_filename.format(trainer), att_w)
+                    self._plot_and_save_attention(att_w, filename.format(trainer))
+            # han
+            for idx, att_w in enumerate(att_ws[num_encs]):
+                filename = "%s/%s.ep.{.updater.epoch}.han.png" % (
+                    self.outdir,
+                    self.data[idx][0],
+                )
+                att_w = self.get_attention_weight(idx, att_w)
+                np_filename = "%s/%s.ep.{.updater.epoch}.han.npy" % (
+                    self.outdir,
+                    self.data[idx][0],
+                )
+                np.save(np_filename.format(trainer), att_w)
+                self._plot_and_save_attention(
+                    att_w, filename.format(trainer), han_mode=True
+                )
+        else:
+            for idx, att_w in enumerate(att_ws):
+                filename = "%s/%s.ep.{.updater.epoch}.png" % (
+                    self.outdir,
+                    self.data[idx][0],
+                )
+                att_w = self.get_attention_weight(idx, att_w)
+                np_filename = "%s/%s.ep.{.updater.epoch}.npy" % (
+                    self.outdir,
+                    self.data[idx][0],
+                )
+                np.save(np_filename.format(trainer), att_w)
+                self._plot_and_save_attention(att_w, filename.format(trainer))
 
     def log_attentions(self, logger, step):
         """Add image files of att_ws matrix to the tensorboard."""
         att_ws = self.get_attention_weights()
-        for idx, att_w in enumerate(att_ws):
-            att_w = self.get_attention_weight(idx, att_w)
-            plot = self.draw_attention_plot(att_w)
-            logger.add_figure("%s" % (self.data[idx][0]), plot.gcf(), step)
-            plot.clf()
+        if isinstance(att_ws, list):  # multi-encoder case
+            num_encs = len(att_ws) - 1
+            # atts
+            for i in range(num_encs):
+                for idx, att_w in enumerate(att_ws[i]):
+                    att_w = self.get_attention_weight(idx, att_w)
+                    plot = self.draw_attention_plot(att_w)
+                    logger.add_figure(
+                        "%s_att%d" % (self.data[idx][0], i + 1), plot.gcf(), step
+                    )
+                    plot.clf()
+            # han
+            for idx, att_w in enumerate(att_ws[num_encs]):
+                att_w = self.get_attention_weight(idx, att_w)
+                plot = self.draw_han_plot(att_w)
+                logger.add_figure("%s_han" % (self.data[idx][0]), plot.gcf(), step)
+                plot.clf()
+        else:
+            for idx, att_w in enumerate(att_ws):
+                att_w = self.get_attention_weight(idx, att_w)
+                plot = self.draw_attention_plot(att_w)
+                logger.add_figure("%s" % (self.data[idx][0]), plot.gcf(), step)
+                plot.clf()
 
     def get_attention_weights(self):
         """Return attention weights.
@@ -134,7 +208,8 @@ class PlotAttentionReport(extension.Extension):
         Returns:
             numpy.ndarray: attention weights.float. Its shape would be
                 differ from backend.
-                * pytorch-> 1) multi-head case => (B, H, Lmax, Tmax), 2) other case => (B, Lmax, Tmax).
+                * pytorch-> 1) multi-head case => (B, H, Lmax, Tmax), 2)
+                  other case => (B, Lmax, Tmax).
                 * chainer-> (B, Lmax, Tmax)
 
         """
@@ -148,11 +223,11 @@ class PlotAttentionReport(extension.Extension):
     def get_attention_weight(self, idx, att_w):
         """Transform attention matrix with regard to self.reverse."""
         if self.reverse:
-            dec_len = int(self.data[idx][1][self.ikey][self.iaxis]['shape'][0])
-            enc_len = int(self.data[idx][1][self.okey][self.oaxis]['shape'][0])
+            dec_len = int(self.data[idx][1][self.ikey][self.iaxis]["shape"][0])
+            enc_len = int(self.data[idx][1][self.okey][self.oaxis]["shape"][0])
         else:
-            dec_len = int(self.data[idx][1][self.okey][self.oaxis]['shape'][0])
-            enc_len = int(self.data[idx][1][self.ikey][self.iaxis]['shape'][0])
+            dec_len = int(self.data[idx][1][self.okey][self.oaxis]["shape"][0])
+            enc_len = int(self.data[idx][1][self.ikey][self.iaxis]["shape"][0])
         if len(att_w.shape) == 3:
             att_w = att_w[:, :dec_len, :enc_len]
         else:
@@ -167,6 +242,7 @@ class PlotAttentionReport(extension.Extension):
 
         """
         import matplotlib.pyplot as plt
+
         att_w = att_w.astype(np.float32)
         if len(att_w.shape) == 3:
             for h, aw in enumerate(att_w, 1):
@@ -181,8 +257,47 @@ class PlotAttentionReport(extension.Extension):
         plt.tight_layout()
         return plt
 
-    def _plot_and_save_attention(self, att_w, filename):
-        plt = self.draw_attention_plot(att_w)
+    def draw_han_plot(self, att_w):
+        """Plot the att_w matrix for hierarchical attention.
+
+        Returns:
+            matplotlib.pyplot: pyplot object with attention matrix image.
+
+        """
+        import matplotlib.pyplot as plt
+
+        if len(att_w.shape) == 3:
+            for h, aw in enumerate(att_w, 1):
+                legends = []
+                plt.subplot(1, len(att_w), h)
+                for i in range(aw.shape[1]):
+                    plt.plot(aw[:, i])
+                    legends.append("Att{}".format(i))
+                plt.ylim([0, 1.0])
+                plt.xlim([0, aw.shape[0]])
+                plt.grid(True)
+                plt.ylabel("Attention Weight")
+                plt.xlabel("Decoder Index")
+                plt.legend(legends)
+        else:
+            legends = []
+            for i in range(att_w.shape[1]):
+                plt.plot(att_w[:, i])
+                legends.append("Att{}".format(i))
+            plt.ylim([0, 1.0])
+            plt.xlim([0, att_w.shape[0]])
+            plt.grid(True)
+            plt.ylabel("Attention Weight")
+            plt.xlabel("Decoder Index")
+            plt.legend(legends)
+        plt.tight_layout()
+        return plt
+
+    def _plot_and_save_attention(self, att_w, filename, han_mode=False):
+        if han_mode:
+            plt = self.draw_han_plot(att_w)
+        else:
+            plt = self.draw_attention_plot(att_w)
         plt.savefig(filename)
         plt.close()
 
@@ -194,7 +309,8 @@ def restore_snapshot(model, snapshot, load_fn=chainer.serializers.load_npz):
         An extension function.
 
     """
-    @training.make_extension(trigger=(1, 'epoch'))
+
+    @training.make_extension(trigger=(1, "epoch"))
     def restore_snapshot(trainer):
         _restore_snapshot(model, snapshot, load_fn)
 
@@ -203,7 +319,7 @@ def restore_snapshot(model, snapshot, load_fn=chainer.serializers.load_npz):
 
 def _restore_snapshot(model, snapshot, load_fn=chainer.serializers.load_npz):
     load_fn(snapshot, model)
-    logging.info('restored from ' + str(snapshot))
+    logging.info("restored from " + str(snapshot))
 
 
 def adadelta_eps_decay(eps_decay):
@@ -216,7 +332,8 @@ def adadelta_eps_decay(eps_decay):
         An extension function.
 
     """
-    @training.make_extension(trigger=(1, 'epoch'))
+
+    @training.make_extension(trigger=(1, "epoch"))
     def adadelta_eps_decay(trainer):
         _adadelta_eps_decay(trainer, eps_decay)
 
@@ -224,28 +341,60 @@ def adadelta_eps_decay(eps_decay):
 
 
 def _adadelta_eps_decay(trainer, eps_decay):
-    optimizer = trainer.updater.get_optimizer('main')
+    optimizer = trainer.updater.get_optimizer("main")
     # for chainer
-    if hasattr(optimizer, 'eps'):
+    if hasattr(optimizer, "eps"):
         current_eps = optimizer.eps
-        setattr(optimizer, 'eps', current_eps * eps_decay)
-        logging.info('adadelta eps decayed to ' + str(optimizer.eps))
+        setattr(optimizer, "eps", current_eps * eps_decay)
+        logging.info("adadelta eps decayed to " + str(optimizer.eps))
     # pytorch
     else:
         for p in optimizer.param_groups:
             p["eps"] *= eps_decay
-            logging.info('adadelta eps decayed to ' + str(p["eps"]))
+            logging.info("adadelta eps decayed to " + str(p["eps"]))
 
 
-def torch_snapshot(savefun=torch.save,
-                   filename='snapshot.ep.{.updater.epoch}'):
+def adam_lr_decay(eps_decay):
+    """Extension to perform adam lr decay.
+
+    Args:
+        eps_decay (float): Decay rate of lr.
+
+    Returns:
+        An extension function.
+
+    """
+
+    @training.make_extension(trigger=(1, "epoch"))
+    def adam_lr_decay(trainer):
+        _adam_lr_decay(trainer, eps_decay)
+
+    return adam_lr_decay
+
+
+def _adam_lr_decay(trainer, eps_decay):
+    optimizer = trainer.updater.get_optimizer("main")
+    # for chainer
+    if hasattr(optimizer, "lr"):
+        current_lr = optimizer.lr
+        setattr(optimizer, "lr", current_lr * eps_decay)
+        logging.info("adam lr decayed to " + str(optimizer.lr))
+    # pytorch
+    else:
+        for p in optimizer.param_groups:
+            p["lr"] *= eps_decay
+            logging.info("adam lr decayed to " + str(p["lr"]))
+
+
+def torch_snapshot(savefun=torch.save, filename="snapshot.ep.{.updater.epoch}"):
     """Extension to take snapshot of the trainer for pytorch.
 
     Returns:
         An extension function.
 
     """
-    @extension.make_extension(trigger=(1, 'epoch'), priority=-100)
+
+    @extension.make_extension(trigger=(1, "epoch"), priority=-100)
     def torch_snapshot(trainer):
         _torch_snapshot_object(trainer, trainer, filename.format(trainer), savefun)
 
@@ -271,12 +420,12 @@ def _torch_snapshot_object(trainer, target, filename, savefun):
     snapshot_dict = {
         "trainer": s.target,
         "model": model_state_dict,
-        "optimizer": trainer.updater.get_optimizer('main').state_dict()
+        "optimizer": trainer.updater.get_optimizer("main").state_dict(),
     }
 
     # save snapshot dictionary
     fn = filename.format(trainer)
-    prefix = 'tmp' + fn
+    prefix = "tmp" + fn
     tmpdir = tempfile.mkdtemp(prefix=prefix, dir=trainer.out)
     tmppath = os.path.join(tmpdir, fn)
     try:
@@ -295,7 +444,8 @@ def add_gradient_noise(model, iteration, duration=100, eta=1.0, scale_factor=0.5
     Args:
         model (torch.nn.model): Model.
         iteration (int): Number of iterations.
-        duration (int) {100, 1000}: Number of durations to control the interval of the `sigma` change.
+        duration (int) {100, 1000}:
+            Number of durations to control the interval of the `sigma` change.
         eta (float) {0.01, 0.3, 1.0}: The magnitude of `sigma`.
         scale_factor (float) {0.55}: The scale of `sigma`.
     """
@@ -321,11 +471,11 @@ def get_model_conf(model_path, conf_path=None):
 
     """
     if conf_path is None:
-        model_conf = os.path.dirname(model_path) + '/model.json'
+        model_conf = os.path.dirname(model_path) + "/model.json"
     else:
         model_conf = conf_path
     with open(model_conf, "rb") as f:
-        logging.info('reading a config file from ' + model_conf)
+        logging.info("reading a config file from " + model_conf)
         confs = json.load(f)
     if isinstance(confs, dict):
         # for lm
@@ -345,8 +495,8 @@ def chainer_load(path, model):
         model (chainer.Chain): Chainer model.
 
     """
-    if 'snapshot' in path:
-        chainer.serializers.load_npz(path, model, path='updater/model:main/')
+    if "snapshot" in os.path.basename(path):
+        chainer.serializers.load_npz(path, model, path="updater/model:main/")
     else:
         chainer.serializers.load_npz(path, model)
 
@@ -359,7 +509,7 @@ def torch_save(path, model):
         model (torch.nn.Module): Torch model.
 
     """
-    if hasattr(model, 'module'):
+    if hasattr(model, "module"):
         torch.save(model.module.state_dict(), path)
     else:
         torch.save(model.state_dict(), path)
@@ -380,7 +530,8 @@ def snapshot_object(target, filename):
         An extension function.
 
     """
-    @extension.make_extension(trigger=(1, 'epoch'), priority=-100)
+
+    @extension.make_extension(trigger=(1, "epoch"), priority=-100)
     def snapshot_object(trainer):
         torch_save(os.path.join(trainer.out, filename.format(trainer)), target)
 
@@ -395,12 +546,14 @@ def torch_load(path, model):
         model (torch.nn.Module): Torch model.
 
     """
-    if 'snapshot' in path:
-        model_state_dict = torch.load(path, map_location=lambda storage, loc: storage)['model']
+    if "snapshot" in os.path.basename(path):
+        model_state_dict = torch.load(path, map_location=lambda storage, loc: storage)[
+            "model"
+        ]
     else:
         model_state_dict = torch.load(path, map_location=lambda storage, loc: storage)
 
-    if hasattr(model, 'module'):
+    if hasattr(model, "module"):
         model.module.load_state_dict(model_state_dict)
     else:
         model.load_state_dict(model_state_dict)
@@ -420,25 +573,25 @@ def torch_resume(snapshot_path, trainer):
     snapshot_dict = torch.load(snapshot_path, map_location=lambda storage, loc: storage)
 
     # restore trainer states
-    d = NpzDeserializer(snapshot_dict['trainer'])
+    d = NpzDeserializer(snapshot_dict["trainer"])
     d.load(trainer)
 
     # restore model states
     if hasattr(trainer.updater.model, "model"):
         # (for TTS model)
         if hasattr(trainer.updater.model.model, "module"):
-            trainer.updater.model.model.module.load_state_dict(snapshot_dict['model'])
+            trainer.updater.model.model.module.load_state_dict(snapshot_dict["model"])
         else:
-            trainer.updater.model.model.load_state_dict(snapshot_dict['model'])
+            trainer.updater.model.model.load_state_dict(snapshot_dict["model"])
     else:
         # (for ASR model)
         if hasattr(trainer.updater.model, "module"):
-            trainer.updater.model.module.load_state_dict(snapshot_dict['model'])
+            trainer.updater.model.module.load_state_dict(snapshot_dict["model"])
         else:
-            trainer.updater.model.load_state_dict(snapshot_dict['model'])
+            trainer.updater.model.load_state_dict(snapshot_dict["model"])
 
     # retore optimizer states
-    trainer.updater.get_optimizer('main').load_state_dict(snapshot_dict['optimizer'])
+    trainer.updater.get_optimizer("main").load_state_dict(snapshot_dict["optimizer"])
 
     # delete opened snapshot
     del snapshot_dict
@@ -457,14 +610,14 @@ def parse_hypothesis(hyp, char_list):
 
     """
     # remove sos and get results
-    tokenid_as_list = list(map(int, hyp['yseq'][1:]))
+    tokenid_as_list = list(map(int, hyp["yseq"][1:]))
     token_as_list = [char_list[idx] for idx in tokenid_as_list]
-    score = float(hyp['score'])
+    score = float(hyp["score"])
 
     # convert to string
     tokenid = " ".join([str(idx) for idx in tokenid_as_list])
     token = " ".join(token_as_list)
-    text = "".join(token_as_list).replace('<space>', ' ')
+    text = "".join(token_as_list).replace("<space>", " ")
 
     return text, token, tokenid, score
 
@@ -474,7 +627,8 @@ def add_results_to_json(js, nbest_hyps, char_list):
 
     Args:
         js (dict[str, Any]): Groundtruth utterance dict.
-        nbest_hyps_sd (list[dict[str, Any]]): List of hypothesis for multi_speakers: nutts x nspkrs.
+        nbest_hyps_sd (list[dict[str, Any]]):
+            List of hypothesis for multi_speakers: nutts x nspkrs.
         char_list (list[str]): List of characters.
 
     Returns:
@@ -483,45 +637,57 @@ def add_results_to_json(js, nbest_hyps, char_list):
     """
     # copy old json info
     new_js = dict()
-    new_js['utt2spk'] = js['utt2spk']
-    new_js['output'] = []
+    new_js["utt2spk"] = js["utt2spk"]
+    new_js["output"] = []
 
     for n, hyp in enumerate(nbest_hyps, 1):
         # parse hypothesis
         rec_text, rec_token, rec_tokenid, score = parse_hypothesis(hyp, char_list)
 
         # copy ground-truth
-        if len(js['output']) > 0:
-            out_dic = dict(js['output'][0].items())
+        if len(js["output"]) > 0:
+            out_dic = dict(js["output"][0].items())
         else:
             # for no reference case (e.g., speech translation)
-            out_dic = {'name': ''}
+            out_dic = {"name": ""}
 
         # update name
-        out_dic['name'] += '[%d]' % n
+        out_dic["name"] += "[%d]" % n
 
         # add recognition results
-        out_dic['rec_text'] = rec_text
-        out_dic['rec_token'] = rec_token
-        out_dic['rec_tokenid'] = rec_tokenid
-        out_dic['score'] = score
+        out_dic["rec_text"] = rec_text
+        out_dic["rec_token"] = rec_token
+        out_dic["rec_tokenid"] = rec_tokenid
+        out_dic["score"] = score
 
         # add to list of N-best result dicts
-        new_js['output'].append(out_dic)
+        new_js["output"].append(out_dic)
 
         # show 1-best result
         if n == 1:
-            if 'text' in out_dic.keys():
-                logging.info('groundtruth: %s' % out_dic['text'])
-            logging.info('prediction : %s' % out_dic['rec_text'])
+            if "text" in out_dic.keys():
+                logging.info("groundtruth: %s" % out_dic["text"])
+            logging.info("prediction : %s" % out_dic["rec_text"])
 
     return new_js
 
 
-def plot_spectrogram(plt, spec, mode='db', fs=None, frame_shift=None,
-                     bottom=True, left=True, right=True, top=False,
-                     labelbottom=True, labelleft=True, labelright=True,
-                     labeltop=False, cmap='inferno'):
+def plot_spectrogram(
+    plt,
+    spec,
+    mode="db",
+    fs=None,
+    frame_shift=None,
+    bottom=True,
+    left=True,
+    right=True,
+    top=False,
+    labelbottom=True,
+    labelleft=True,
+    labelright=True,
+    labeltop=False,
+    cmap="inferno",
+):
     """Plot spectrogram using matplotlib.
 
     Args:
@@ -542,37 +708,96 @@ def plot_spectrogram(plt, spec, mode='db', fs=None, frame_shift=None,
 
     """
     spec = np.abs(spec)
-    if mode == 'db':
+    if mode == "db":
         x = 20 * np.log10(spec + np.finfo(spec.dtype).eps)
-    elif mode == 'linear':
+    elif mode == "linear":
         x = spec
     else:
         raise ValueError(mode)
 
     if fs is not None:
         ytop = fs / 2000
-        ylabel = 'kHz'
+        ylabel = "kHz"
     else:
         ytop = x.shape[0]
-        ylabel = 'bin'
+        ylabel = "bin"
 
     if frame_shift is not None and fs is not None:
         xtop = x.shape[1] * frame_shift / fs
-        xlabel = 's'
+        xlabel = "s"
     else:
         xtop = x.shape[1]
-        xlabel = 'frame'
+        xlabel = "frame"
 
     extent = (0, xtop, 0, ytop)
     plt.imshow(x[::-1], cmap=cmap, extent=extent)
 
     if labelbottom:
-        plt.xlabel('time [{}]'.format(xlabel))
+        plt.xlabel("time [{}]".format(xlabel))
     if labelleft:
-        plt.ylabel('freq [{}]'.format(ylabel))
-    plt.colorbar().set_label('{}'.format(mode))
+        plt.ylabel("freq [{}]".format(ylabel))
+    plt.colorbar().set_label("{}".format(mode))
 
-    plt.tick_params(bottom=bottom, left=left, right=right, top=top,
-                    labelbottom=labelbottom, labelleft=labelleft,
-                    labelright=labelright, labeltop=labeltop)
-    plt.axis('auto')
+    plt.tick_params(
+        bottom=bottom,
+        left=left,
+        right=right,
+        top=top,
+        labelbottom=labelbottom,
+        labelleft=labelleft,
+        labelright=labelright,
+        labeltop=labeltop,
+    )
+    plt.axis("auto")
+
+
+# * ------------------ recognition related ------------------ *
+def format_mulenc_args(args):
+    """Format args for multi-encoder setup.
+
+    It deals with following situations:  (when args.num_encs=2):
+    1. args.elayers = None -> args.elayers = [4, 4];
+    2. args.elayers = 4 -> args.elayers = [4, 4];
+    3. args.elayers = [4, 4, 4] -> args.elayers = [4, 4].
+
+    """
+    # default values when None is assigned.
+    default_dict = {
+        "etype": "blstmp",
+        "elayers": 4,
+        "eunits": 300,
+        "subsample": "1",
+        "dropout_rate": 0.0,
+        "atype": "dot",
+        "adim": 320,
+        "awin": 5,
+        "aheads": 4,
+        "aconv_chans": -1,
+        "aconv_filts": 100,
+    }
+    for k in default_dict.keys():
+        if isinstance(vars(args)[k], list):
+            if len(vars(args)[k]) != args.num_encs:
+                logging.warning(
+                    "Length mismatch {}: Convert {} to {}.".format(
+                        k, vars(args)[k], vars(args)[k][: args.num_encs]
+                    )
+                )
+            vars(args)[k] = vars(args)[k][: args.num_encs]
+        else:
+            if not vars(args)[k]:
+                # assign default value if it is None
+                vars(args)[k] = default_dict[k]
+                logging.warning(
+                    "{} is not specified, use default value {}.".format(
+                        k, default_dict[k]
+                    )
+                )
+            # duplicate
+            logging.warning(
+                "Type mismatch {}: Convert {} to {}.".format(
+                    k, vars(args)[k], [vars(args)[k] for _ in range(args.num_encs)]
+                )
+            )
+            vars(args)[k] = [vars(args)[k] for _ in range(args.num_encs)]
+    return args

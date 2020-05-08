@@ -12,14 +12,16 @@ import os
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lang_tag", type=str, default=None, nargs="?",
-                        help="language tag (can be used for multi lingual case)")
-    parser.add_argument("--spk_tag", type=str,
-                        help="speaker tag")
-    parser.add_argument("jsons", nargs="+", type=str,
-                        help="*_mls.json filenames")
-    parser.add_argument("out", type=str,
-                        help="output filename")
+    parser.add_argument(
+        "--lang_tag",
+        type=str,
+        default=None,
+        nargs="?",
+        help="language tag (can be used for multi lingual case)",
+    )
+    parser.add_argument("--spk_tag", type=str, help="speaker tag")
+    parser.add_argument("jsons", nargs="+", type=str, help="*_mls.json filenames")
+    parser.add_argument("out", type=str, help="output filename")
     args = parser.parse_args()
 
     dirname = os.path.dirname(args.out)
@@ -31,7 +33,7 @@ def main():
             with codecs.open(filename, "r", encoding="utf-8") as f:
                 js = json.load(f)
             for key in sorted(js.keys()):
-                uid = args.spk_tag + "_" + key[:-4]
+                uid = args.spk_tag + "_" + key.replace(".wav", "")
                 text = js[key]["clean"].upper()
                 if args.lang_tag is None:
                     line = "%s %s\n" % (uid, text)

@@ -49,12 +49,16 @@ def make_arg(**kwargs):
         verbose=2,
         char_list=[u"あ", u"い", u"う", u"え", u"お"],
         outdir=None,
+        report_bleu=False,
         sym_space="<space>",
+        sym_blank="<blank>",
         sortagrad=0,
         context_residual=False,
-        use_frontend=False,
+        tie_src_tgt_embedding=False,
+        tie_classifier=False,
+        multilingual=False,
         replace_sos=False,
-        tgt_lang=False
+        tgt_lang=False,
     )
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
@@ -68,19 +72,11 @@ def prepare_inputs(mode, ilens=[20, 10], olens=[4, 3], is_cuda=False):
     ilens = np.array([x.shape[0] for x in xs], dtype=np.int32)
 
     if mode == "chainer":
-        if is_cuda:
-            xp = importlib.import_module('cupy')
-            xs = [chainer.Variable(xp.array(x)) for x in xs]
-            ys = [chainer.Variable(xp.array(y)) for y in ys]
-            ilens = xp.array(ilens)
-        else:
-            xs = [chainer.Variable(x) for x in xs]
-            ys = [chainer.Variable(y) for y in ys]
-        return xs, ilens, ys
+        raise NotImplementedError
 
     elif mode == "pytorch":
         ilens = torch.from_numpy(ilens).long()
-        xs_pad = pad_list([torch.from_numpy(x).long() for x in xs], 6)
+        xs_pad = pad_list([torch.from_numpy(x).long() for x in xs], 0)
         ys_pad = pad_list([torch.from_numpy(y).long() for y in ys], -1)
         if is_cuda:
             xs_pad = xs_pad.cuda()
@@ -93,13 +89,13 @@ def prepare_inputs(mode, ilens=[20, 10], olens=[4, 3], is_cuda=False):
 
 
 def convert_batch(batch, backend="pytorch", is_cuda=False, idim=5, odim=5):
-    ilens = np.array([x[1]['output'][1]['shape'][0] for x in batch])
-    olens = np.array([x[1]['output'][0]['shape'][0] for x in batch])
+    ilens = np.array([x[1]["output"][1]["shape"][0] for x in batch])
+    olens = np.array([x[1]["output"][0]["shape"][0] for x in batch])
     xs = [np.random.randint(0, idim, ilen).astype(np.int32) for ilen in ilens]
     ys = [np.random.randint(0, odim, olen).astype(np.int32) for olen in olens]
     is_pytorch = backend == "pytorch"
     if is_pytorch:
-        xs = pad_list([torch.from_numpy(x).long() for x in xs], idim)
+        xs = pad_list([torch.from_numpy(x).long() for x in xs], 0)
         ilens = torch.from_numpy(ilens).long()
         ys = pad_list([torch.from_numpy(y).long() for y in ys], -1)
 
@@ -108,58 +104,56 @@ def convert_batch(batch, backend="pytorch", is_cuda=False, idim=5, odim=5):
             ilens = ilens.cuda()
             ys = ys.cuda()
     else:
-        if is_cuda:
-            xp = importlib.import_module('cupy')
-            xs = [chainer.Variable(xp.array(x)) for x in xs]
-            ys = [chainer.Variable(xp.array(y)) for y in ys]
-            ilens = xp.array(ilens)
-        else:
-            xs = [chainer.Variable(x) for x in xs]
-            ys = [chainer.Variable(y) for y in ys]
+        raise NotImplementedError
 
     return xs, ilens, ys
 
 
 @pytest.mark.parametrize(
-    "module, model_dict", [
-        ('espnet.nets.pytorch_backend.e2e_mt', {}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'atype': 'noatt'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'atype': 'dot'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'atype': 'coverage'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'atype': 'multi_head_dot'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'atype': 'multi_head_add'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'etype': 'grup'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'etype': 'lstmp'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'etype': 'bgrup'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'etype': 'blstmp'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'etype': 'bgru'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'etype': 'blstm'}),
-        ('espnet.nets.pytorch_backend.e2e_mt', {'context_residual': True}),
-    ]
+    "module, model_dict",
+    [
+        ("espnet.nets.pytorch_backend.e2e_mt", {}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"atype": "noatt"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"atype": "dot"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"atype": "coverage"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"atype": "multi_head_dot"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"atype": "multi_head_add"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"etype": "grup"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"etype": "lstmp"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"etype": "bgrup"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"etype": "blstmp"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"etype": "bgru"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"etype": "blstm"}),
+        ("espnet.nets.pytorch_backend.e2e_mt", {"context_residual": True}),
+    ],
 )
 def test_model_trainable_and_decodable(module, model_dict):
     args = make_arg(**model_dict)
     if "pytorch" in module:
         batch = prepare_inputs("pytorch")
     else:
-        batch = prepare_inputs("chainer")
+        raise NotImplementedError
 
     m = importlib.import_module(module)
     model = m.E2E(6, 5, args)
-    attn_loss = model(*batch)
-    attn_loss.backward()  # trainable
+    loss = model(*batch)
+    if isinstance(loss, tuple):
+        # chainer return several values as tuple
+        loss[0].backward()  # trainable
+    else:
+        loss.backward()  # trainable
 
     with torch.no_grad(), chainer.no_backprop_mode():
         in_data = np.random.randint(0, 5, (1, 10))
         model.translate(in_data, args, args.char_list)  # decodable
         if "pytorch" in module:
             batch_in_data = np.random.randint(0, 5, (2, 10))
-            model.translate_batch(batch_in_data, args, args.char_list)  # batch decodable
+            model.translate_batch(
+                batch_in_data, args, args.char_list
+            )  # batch decodable
 
 
-@pytest.mark.parametrize(
-    "module", ["pytorch"]
-)
+@pytest.mark.parametrize("module", ["pytorch"])
 def test_sortagrad_trainable(module):
     args = make_arg(sortagrad=1)
     dummy_json = make_dummy_json_mt(4, [10, 20], [10, 20], idim=6, odim=5)
@@ -167,19 +161,23 @@ def test_sortagrad_trainable(module):
         import espnet.nets.pytorch_backend.e2e_mt as m
     else:
         import espnet.nets.chainer_backend.e2e_mt as m
-    batchset = make_batchset(dummy_json, 2, 2 ** 10, 2 ** 10, shortest_first=True, mt=True, iaxis=1, oaxis=0)
+    batchset = make_batchset(
+        dummy_json, 2, 2 ** 10, 2 ** 10, shortest_first=True, mt=True, iaxis=1, oaxis=0
+    )
     model = m.E2E(6, 5, args)
     for batch in batchset:
-        attn_loss = model(*convert_batch(batch, module, idim=6, odim=5))
-        attn_loss.backward()
+        loss = model(*convert_batch(batch, module, idim=6, odim=5))
+        if isinstance(loss, tuple):
+            # chainer return several values as tuple
+            loss[0].backward()  # trainable
+        else:
+            loss.backward()  # trainable
     with torch.no_grad(), chainer.no_backprop_mode():
         in_data = np.random.randint(0, 5, (1, 100))
         model.translate(in_data, args, args.char_list)
 
 
-@pytest.mark.parametrize(
-    "module", ["pytorch"]
-)
+@pytest.mark.parametrize("module", ["pytorch"])
 def test_sortagrad_trainable_with_batch_bins(module):
     args = make_arg(sortagrad=1)
     idim = 6
@@ -188,29 +186,38 @@ def test_sortagrad_trainable_with_batch_bins(module):
     if module == "pytorch":
         import espnet.nets.pytorch_backend.e2e_mt as m
     else:
-        import espnet.nets.chainer_backend.e2e_mt as m
+        raise NotImplementedError
     batch_elems = 2000
-    batchset = make_batchset(dummy_json, batch_bins=batch_elems, shortest_first=True, mt=True, iaxis=1, oaxis=0)
+    batchset = make_batchset(
+        dummy_json,
+        batch_bins=batch_elems,
+        shortest_first=True,
+        mt=True,
+        iaxis=1,
+        oaxis=0,
+    )
     for batch in batchset:
         n = 0
         for uttid, info in batch:
-            ilen = int(info['output'][1]['shape'][0])
-            olen = int(info['output'][0]['shape'][0])
+            ilen = int(info["output"][1]["shape"][0])
+            olen = int(info["output"][0]["shape"][0])
             n += ilen * idim + olen * odim
         assert olen < batch_elems
 
     model = m.E2E(6, 5, args)
     for batch in batchset:
-        attn_loss = model(*convert_batch(batch, module, idim=6, odim=5))
-        attn_loss.backward()
+        loss = model(*convert_batch(batch, module, idim=6, odim=5))
+        if isinstance(loss, tuple):
+            # chainer return several values as tuple
+            loss[0].backward()  # trainable
+        else:
+            loss.backward()  # trainable
     with torch.no_grad(), chainer.no_backprop_mode():
         in_data = np.random.randint(0, 5, (1, 100))
         model.translate(in_data, args, args.char_list)
 
 
-@pytest.mark.parametrize(
-    "module", ["pytorch"]
-)
+@pytest.mark.parametrize("module", ["pytorch"])
 def test_sortagrad_trainable_with_batch_frames(module):
     args = make_arg(sortagrad=1)
     idim = 6
@@ -219,27 +226,31 @@ def test_sortagrad_trainable_with_batch_frames(module):
     if module == "pytorch":
         import espnet.nets.pytorch_backend.e2e_mt as m
     else:
-        import espnet.nets.chainer_backend.e2e_mt as m
+        raise NotImplementedError
     batch_frames_in = 20
     batch_frames_out = 20
-    batchset = make_batchset(dummy_json,
-                             batch_frames_in=batch_frames_in,
-                             batch_frames_out=batch_frames_out,
-                             shortest_first=True,
-                             mt=True, iaxis=1, oaxis=0)
+    batchset = make_batchset(
+        dummy_json,
+        batch_frames_in=batch_frames_in,
+        batch_frames_out=batch_frames_out,
+        shortest_first=True,
+        mt=True,
+        iaxis=1,
+        oaxis=0,
+    )
     for batch in batchset:
         i = 0
         o = 0
         for uttid, info in batch:
-            i += int(info['output'][1]['shape'][0])
-            o += int(info['output'][0]['shape'][0])
+            i += int(info["output"][1]["shape"][0])
+            o += int(info["output"][0]["shape"][0])
         assert i <= batch_frames_in
         assert o <= batch_frames_out
 
     model = m.E2E(6, 5, args)
     for batch in batchset:
-        attn_loss = model(*convert_batch(batch, module, idim=6, odim=5))
-        attn_loss.backward()
+        loss = model(*convert_batch(batch, module, idim=6, odim=5))
+        loss.backward()
     with torch.no_grad(), chainer.no_backprop_mode():
         in_data = np.random.randint(0, 5, (1, 100))
         model.translate(in_data, args, args.char_list)
@@ -254,81 +265,59 @@ def init_torch_weight_const(m, val):
 @pytest.mark.parametrize("etype", ["blstm"])
 def test_loss(etype):
     # ch = importlib.import_module('espnet.nets.chainer_backend.e2e_mt')
-    th = importlib.import_module('espnet.nets.pytorch_backend.e2e_mt')
+    th = importlib.import_module("espnet.nets.pytorch_backend.e2e_mt")
     args = make_arg(etype=etype)
-    # ch_model = ch.E2E(6, 5, args)
-    # ch_model.cleargrads()
     th_model = th.E2E(6, 5, args)
 
     const = 1e-4
     init_torch_weight_const(th_model, const)
-    # init_chainer_weight_const(ch_model, const)
 
-    # ch_batch = prepare_inputs("chainer")
     th_batch = prepare_inputs("pytorch")
 
-    # _, ch_ctc, ch_att, ch_acc = ch_model(*ch_batch)
     th_model(*th_batch)
     th_att = th_model.loss
 
-    # test masking
-    # ch_ench = ch_model.att.pre_compute_enc_h.data
-    # th_ench = th_model.att[0].pre_compute_enc_h.detach().numpy()
-    # np.testing.assert_equal(ch_ench == 0.0, th_ench == 0.0)
-
-    # test loss with constant weights (1.0) and bias (0.0) except for foget-bias (1.0)
-    # np.testing.assert_allclose(ch_att.data, th_att.detach().numpy())
-
-    # test cross-entropy grads
-    # ch_model.cleargrads()
     th_model.zero_grad()
 
-    # _, ch_ctc, ch_att, ch_acc = ch_model(*ch_batch)
     th_model(*th_batch)
     th_att = th_model.loss
-    # ch_att.backward()
     th_att.backward()
-    # np.testing.assert_allclose(ch_model.dec.output.W.grad,
-    #                            th_model.dec.output.weight.grad.data.numpy(), 1e-7, 1e-8)
-    # np.testing.assert_allclose(ch_model.dec.output.b.grad,
-    #                            th_model.dec.output.bias.grad.data.numpy(), 1e-5, 1e-6)
 
 
 @pytest.mark.parametrize("etype", ["blstm"])
 def test_zero_length_target(etype):
-    # ch = importlib.import_module('espnet.nets.chainer_backend.e2e_mt')
-    th = importlib.import_module('espnet.nets.pytorch_backend.e2e_mt')
+    th = importlib.import_module("espnet.nets.pytorch_backend.e2e_mt")
     args = make_arg(etype=etype)
-    # ch_model = ch.E2E(6, 5, args)
-    # ch_model.cleargrads()
     th_model = th.E2E(6, 5, args)
 
-    # ch_batch = prepare_inputs("chainer", olens=[4, 0])
     th_batch = prepare_inputs("pytorch", olens=[4, 0])
 
-    # ch_model(*ch_batch)
     th_model(*th_batch)
 
-    # NOTE: We ignore all zero length case because chainer also fails. Have a nice data-prep!
+    # NOTE: We ignore all zero length case because chainer also fails.
+    # Have a nice data-prep!
     # out_data = ""
     # data = [
-    #     ("aaa", dict(feat=np.random.randint(0, 5, (1, 200)).astype(np.float32), tokenid="")),
-    #     ("bbb", dict(feat=np.random.randint(0, 5, (1, 100)).astype(np.float32), tokenid="")),
-    #     ("cc", dict(feat=np.random.randint(0, 5, (1, 100)).astype(np.float32), tokenid=""))
+    #     ("aaa",
+    #      dict(feat=np.random.randint(0, 5, (1, 200)).astype(np.float32), tokenid="")),
+    #     ("bbb",
+    #      dict(feat=np.random.randint(0, 5, (1, 100)).astype(np.float32), tokenid="")),
+    #     ("cc",
+    #      dict(feat=np.random.randint(0, 5, (1, 100)).astype(np.float32), tokenid=""))
     # ]
-    # ch_ctc, ch_att, ch_acc = ch_model(data)
     # th_ctc, th_att, th_acc = th_model(data)
 
 
 @pytest.mark.parametrize(
-    "module, atype", [
-        ('espnet.nets.pytorch_backend.e2e_mt', 'noatt'),
-        ('espnet.nets.pytorch_backend.e2e_mt', 'dot'),
-        ('espnet.nets.pytorch_backend.e2e_mt', 'add'),
-        ('espnet.nets.pytorch_backend.e2e_mt', 'coverage'),
-        ('espnet.nets.pytorch_backend.e2e_mt', 'multi_head_dot'),
-        ('espnet.nets.pytorch_backend.e2e_mt', 'multi_head_add'),
-    ]
+    "module, atype",
+    [
+        ("espnet.nets.pytorch_backend.e2e_mt", "noatt"),
+        ("espnet.nets.pytorch_backend.e2e_mt", "dot"),
+        ("espnet.nets.pytorch_backend.e2e_mt", "add"),
+        ("espnet.nets.pytorch_backend.e2e_mt", "coverage"),
+        ("espnet.nets.pytorch_backend.e2e_mt", "multi_head_dot"),
+        ("espnet.nets.pytorch_backend.e2e_mt", "multi_head_add"),
+    ],
 )
 def test_calculate_all_attentions(module, atype):
     m = importlib.import_module(module)
@@ -336,19 +325,19 @@ def test_calculate_all_attentions(module, atype):
     if "pytorch" in module:
         batch = prepare_inputs("pytorch")
     else:
-        batch = prepare_inputs("chainer")
+        raise NotImplementedError
     model = m.E2E(6, 5, args)
     with chainer.no_backprop_mode():
         if "pytorch" in module:
             att_ws = model.calculate_all_attentions(*batch)[0]
         else:
-            att_ws = model.calculate_all_attentions(*batch)
+            raise NotImplementedError
         print(att_ws.shape)
 
 
 def test_torch_save_and_load():
-    m = importlib.import_module('espnet.nets.pytorch_backend.e2e_mt')
-    utils = importlib.import_module('espnet.asr.asr_utils')
+    m = importlib.import_module("espnet.nets.pytorch_backend.e2e_mt")
+    utils = importlib.import_module("espnet.asr.asr_utils")
     args = make_arg()
     model = m.E2E(6, 5, args)
     # initialize randomly
@@ -369,7 +358,9 @@ def test_torch_save_and_load():
         os.remove(tmppath)
 
 
-@pytest.mark.skipif(not torch.cuda.is_available() and not chainer.cuda.available, reason="gpu required")
+@pytest.mark.skipif(
+    not torch.cuda.is_available() and not chainer.cuda.available, reason="gpu required"
+)
 @pytest.mark.parametrize("module", ["espnet.nets.pytorch_backend.e2e_mt"])
 def test_gpu_trainable(module):
     m = importlib.import_module(module)
@@ -379,10 +370,13 @@ def test_gpu_trainable(module):
         batch = prepare_inputs("pytorch", is_cuda=True)
         model.cuda()
     else:
-        batch = prepare_inputs("chainer", is_cuda=True)
-        model.to_gpu()
+        raise NotImplementedError
     loss = model(*batch)
-    loss.backward()  # trainable
+    if isinstance(loss, tuple):
+        # chainer return several values as tuple
+        loss[0].backward()  # trainable
+    else:
+        loss.backward()  # trainable
 
 
 @pytest.mark.skipif(torch.cuda.device_count() < 2, reason="multi gpu required")
@@ -397,19 +391,7 @@ def test_multi_gpu_trainable(module):
         model = torch.nn.DataParallel(model, device_ids)
         batch = prepare_inputs("pytorch", is_cuda=True)
         model.cuda()
-        loss = 1. / ngpu * model(*batch)
+        loss = 1.0 / ngpu * model(*batch)
         loss.backward(loss.new_ones(ngpu))  # trainable
     else:
-        import copy
-        import cupy
-        losses = []
-        for device in device_ids:
-            with cupy.cuda.Device(device):
-                batch = prepare_inputs("chainer", is_cuda=True)
-                _model = copy.deepcopy(model)  # Transcribed from training.updaters.ParallelUpdater
-                _model.to_gpu()
-                loss = 1. / ngpu * _model(*batch)
-                losses.append(loss)
-
-        for loss in losses:
-            loss.backward()  # trainable
+        raise NotImplementedError

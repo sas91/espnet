@@ -4,6 +4,7 @@
 \#*\#
 .\#*
 *DS_Store
+out.txt
 espnet.egg-info/
 doc/_build
 slurm-*.out
@@ -14,32 +15,39 @@ tmp*
 .pytest_cache/
 __pycache__/
 check_autopep8
-.coverage*
+.coverage
+htmlcov
 coverage.xml*
 bats-core/
 shellcheck*
 check_shellcheck*
 test_spm.vocab
 test_spm.model
+.vscode*
+*.vim
+*.swp
 
 # recipe related
-egs/*/*/data*
-egs/*/*/db
-egs/*/*/downloads
-egs/*/*/dump
-egs/*/*/enhan
-egs/*/*/exp
-egs/*/*/fbank
-egs/*/*/mfcc
-egs/*/*/stft
-egs/*/*/tensorboard
-egs/*/*/wav*
+egs*/*/*/data*
+egs*/*/*/db
+egs*/*/*/downloads
+egs*/*/*/dump
+egs*/*/*/enhan
+egs*/*/*/exp
+egs*/*/*/fbank
+egs*/*/*/mfcc
+egs*/*/*/stft
+egs*/*/*/tensorboard
+egs*/*/*/wav*
 
 # tools related
+tools/bin
+tools/include
+tools/lib
+tools/lib64
 tools/bats-core
 tools/chainer_ctc/
 tools/kaldi*
-tools/mecab/
 tools/miniconda.sh
 tools/moses/
 tools/mwerSegmenter/
@@ -51,3 +59,6 @@ tools/warp-ctc/
 tools/warp-transducer/
 tools/*.done
 tools/PESQ*
+tools/hts_engine_API*
+tools/open_jtalk*
+tools/pyopenjtalk*

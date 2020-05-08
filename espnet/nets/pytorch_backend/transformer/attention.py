@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# Copyright 2019 Shigeki Karita
+#  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
+
+"""Multi-Head Attention layer definition."""
+
 import math
 
 import numpy
@@ -36,14 +44,16 @@ def multi_headed_attention(n_head, n_feat, dropout_rate, attention_type='self_at
 
 
 class MultiHeadedAttention(nn.Module):
-    """Multi-Head Attention layer
+    """Multi-Head Attention layer.
 
     :param int n_head: the number of head s
     :param int n_feat: the number of features
     :param float dropout_rate: dropout rate
+
     """
 
     def __init__(self, n_head, n_feat, dropout_rate):
+        """Construct an MultiHeadedAttention object."""
         super(MultiHeadedAttention, self).__init__()
         assert n_feat % n_head == 0
         # We assume d_v always equals d_k
@@ -57,7 +67,7 @@ class MultiHeadedAttention(nn.Module):
         self.dropout = nn.Dropout(p=dropout_rate)
 
     def forward(self, query, key, value, mask):
-        """Compute 'Scaled Dot Product Attention'
+        """Compute 'Scaled Dot Product Attention'.
 
         :param torch.Tensor query: (batch, time1, size)
         :param torch.Tensor key: (batch, time2, size)
@@ -75,18 +85,26 @@ class MultiHeadedAttention(nn.Module):
         k = k.transpose(1, 2)  # (batch, head, time2, d_k)
         v = v.transpose(1, 2)  # (batch, head, time2, d_k)
 
-        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)  # (batch, head, time1, time2)
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(
+            self.d_k
+        )  # (batch, head, time1, time2)
         if mask is not None:
             mask = mask.unsqueeze(1).eq(0)  # (batch, 1, time1, time2)
-            min_value = float(numpy.finfo(torch.tensor(0, dtype=scores.dtype).numpy().dtype).min)
+            min_value = float(
+                numpy.finfo(torch.tensor(0, dtype=scores.dtype).numpy().dtype).min
+            )
             scores = scores.masked_fill(mask, min_value)
-            self.attn = torch.softmax(scores, dim=-1).masked_fill(mask, 0.0)  # (batch, head, time1, time2)
+            self.attn = torch.softmax(scores, dim=-1).masked_fill(
+                mask, 0.0
+            )  # (batch, head, time1, time2)
         else:
             self.attn = torch.softmax(scores, dim=-1)  # (batch, head, time1, time2)
 
         p_attn = self.dropout(self.attn)
         x = torch.matmul(p_attn, v)  # (batch, head, time1, d_k)
-        x = x.transpose(1, 2).contiguous().view(n_batch, -1, self.h * self.d_k)  # (batch, time1, d_model)
+        x = (
+            x.transpose(1, 2).contiguous().view(n_batch, -1, self.h * self.d_k)
+        )  # (batch, time1, d_model)
         return self.linear_out(x)  # (batch, time1, d_model)
 
 
