@@ -5,11 +5,11 @@ PYTHON :=
 # NOTE(kan-bayashi): Use 3.7.3 to avoid sentencepiece installation error
 PYTHON_VERSION := 3.7.3
 CUPY_VERSION := 6.0.0
-CUDA_VERSION := 9.0
+CUDA_VERSION := 10.0
 # PyTorch version: 0.4.1, 1.0.0, 1.0.1, 1.1.0, 1.2.0, 1.3.0, 1.3.1, 1.4.0
 TH_VERSION := 1.0.1
 # Use a prebuild Kaldi to omit the installation
-KALDI := ~/work/aswin/kaldi/kaldi/
+KALDI := /export/c04/asubraman/espnet-tencent/tools/kaldi 
 WGET := wget --tries=3
 
 

@@ -22,7 +22,7 @@ do_delta=true
 
 # config files
 preprocess_config=conf/no_preprocess.yaml  # use conf/specaug.yaml for data augmentation
-train_config=conf/train_multispkr.yaml
+train_config=conf/train_multispkr_transformer.yaml
 lm_config=conf/lm.yaml
 decode_config=conf/decode.yaml
 
@@ -43,12 +43,12 @@ recog_model=model.acc.best # set a model to be used for decoding: 'model.acc.bes
 wsj0=/export/corpora5/LDC/LDC93S6B
 wsj1=/export/corpora5/LDC/LDC94S13B
 
-use_wsj0_2mix=true    # Using wsj0-2mix corpus. In wsj_2mix case, please change it
+use_wsj0_2mix=False    # Using wsj0-2mix corpus. In wsj_2mix case, please change it
 wsj0_full_wav=$PWD/data/wsj0_mix/wsj0_wav     # In wsj0_2mix case
 wsj0_2mix_wav=$PWD/data/wsj0_mix/2speakers    # In wsj0_2mix case
 wsj0_2mix_scripts=$PWD/data/wsj0_mix/scripts  # In wsj0_2mix case
 wsj_full_wav=$PWD/data/wsj_mix/wsj_wav      # In wsj_2mix case
-wsj_2mix_wav=$PWD/data/wsj_mix/2speakers    # In wsj_2mix case
+wsj_2mix_wav=/export/c09/xkc09/data/wsj_mix/2speakers    # In wsj_2mix case
 wsj_2mix_scripts=$PWD/data/wsj_mix/scripts  # In wsj_2mix case
 
 # exp tag
@@ -72,21 +72,21 @@ if [ ${stage} -le 0 ]; then
 
     ### First need wsj corpus to prepare language information and wsj_mix generation
     ### This is from Kaldi WSJ recipe
-    local/wsj_data_prep.sh ${wsj0}/??-{?,??}.? ${wsj1}/??-{?,??}.?
-    local/wsj_format_data.sh
-    mkdir -p data/wsj
-    mv data/{dev_dt_*,local,test_dev*,test_eval*,train_si284} data/wsj
+    #local/wsj_data_prep.sh ${wsj0}/??-{?,??}.? ${wsj1}/??-{?,??}.?
+    #local/wsj_format_data.sh
+    #mkdir -p data/wsj
+    #mv data/{dev_dt_*,local,test_dev*,test_eval*,train_si284} data/wsj
 
-    if [ ${use_wsj0_2mix} ]; then
-        ### This part is for WSJ0 mix, which was released by MERL created from WSJ0 corpus. Used in
-        ### Hershey, John R., et al. Deep clustering: Discriminative embeddings for segmentation and separation. 2016.
-        ### Isik, Yusuf, et al. Single-channel multi-speaker separation using deep clustering. 2016.
-        ### Download mixture scripts and create mixtures for 2 speakers
-        local/wsj0_create_mixture.sh ${wsj0_2mix_scripts} ${wsj0} ${wsj0_full_wav} \
-            ${wsj0_2mix_wav} || exit 1;
-        local/wsj0_2mix_data_prep.sh ${wsj0_2mix_wav}/wav16k/max ${wsj0_2mix_scripts} \
-            ${wsj0_full_wav} || exit 1;
-    else
+#    if [ ${use_wsj0_2mix} ]; then
+#        ### This part is for WSJ0 mix, which was released by MERL created from WSJ0 corpus. Used in
+#        ### Hershey, John R., et al. Deep clustering: Discriminative embeddings for segmentation and separation. 2016.
+#        ### Isik, Yusuf, et al. Single-channel multi-speaker separation using deep clustering. 2016.
+#        ### Download mixture scripts and create mixtures for 2 speakers
+#        local/wsj0_create_mixture.sh ${wsj0_2mix_scripts} ${wsj0} ${wsj0_full_wav} \
+#            ${wsj0_2mix_wav} || exit 1;
+#        local/wsj0_2mix_data_prep.sh ${wsj0_2mix_wav}/wav16k/max ${wsj0_2mix_scripts} \
+#            ${wsj0_full_wav} || exit 1;
+#    else
         ### Or this part is for WSJ-2mix, which is a larger two-speaker mixture corpus created from WSJ corpus. Used in
         ### Seki H, Hori T, Watanabe S, et al. End-to-End Multi-Lingual Multi-Speaker Speech Recognition[J]. 2018. and
         ### Chang X, Qian Y, Yu K, et al. End-to-End Monaural Multi-speaker ASR System without Pretraining[J]. 2019
@@ -94,7 +94,7 @@ if [ ${stage} -le 0 ]; then
         local/wsj_create_mixture.sh ${wsj_2mix_scripts} data/wsj ${wsj_full_wav} \
             ${wsj_2mix_wav} || exit 1;
         local/wsj_2mix_data_prep.sh ${wsj_2mix_wav}/wav16k/max ${wsj_2mix_scripts} || exit 1;
-    fi
+#    fi
 fi
 
 feat_tr_dir=${dumpdir}/${train_set}/delta${do_delta}; mkdir -p ${feat_tr_dir}

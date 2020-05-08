@@ -94,7 +94,7 @@ class Encoder(torch.nn.Module):
         max_attn_span=None,
         span_init=0,
         span_ratio=0.5,
-        ratio_adaptive=False,
+        ratio_adaptive=False
     ):
         """Construct an Encoder object."""
         super(Encoder, self).__init__()
@@ -142,11 +142,8 @@ class Encoder(torch.nn.Module):
                 lambda lnum: EncoderLayer(
                     attention_dim,
                     multi_headed_attention(attention_heads, attention_dim, attention_dropout_rate,
-                                           attention_type, max_span=max_attn_span[min(len(max_attn_span)-1, idx)],
+                                           attention_type, max_span=max_attn_span[min(len(max_attn_span)-1, lnum)],
                                            span_init=span_init, span_ratio=span_ratio, ratio_adaptive=ratio_adaptive),
-                    MultiHeadedAttention(
-                        attention_heads, attention_dim, attention_dropout_rate
-                    ),
                     positionwise_layer(*positionwise_layer_args),
                     dropout_rate,
                     normalize_before,

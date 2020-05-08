@@ -13,36 +13,6 @@ from espnet.nets.pytorch_backend.frontends.dnn_wpe import DNN_WPE
 
 
 class Frontend(nn.Module):
-<<<<<<< HEAD
-    def __init__(self,
-                 idim: int,
-                 # WPE options
-                 use_wpe: bool = False,
-                 wtype: str = 'blstmp',
-                 wlayers: int = 3,
-                 wunits: int = 300,
-                 wprojs: int = 320,
-                 wdropout_rate: float = 0.0,
-                 taps: int = 5,
-                 delay: int = 3,
-                 use_dnn_mask_for_wpe: bool = True,
-
-                 # Beamformer options
-                 use_beamformer: bool = False,
-                 btype: str = 'blstmp',
-                 blayers: int = 3,
-                 bunits: int = 300,
-                 bprojs: int = 320,
-                 bnmask: int = 2,
-                 badim: int = 320,
-                 ref_channel: int = -1,
-                 bdropout_rate=0.0,
-                 #Transformer
-                 attention_dim=None,
-                 attention_heads=None,
-                 attention_dropout_rate=None,
-                 batt_restr_window=15):
-=======
     def __init__(
         self,
         idim: int,
@@ -67,7 +37,6 @@ class Frontend(nn.Module):
         ref_channel: int = -1,
         bdropout_rate=0.0,
     ):
->>>>>>> aswin
         super().__init__()
 
         self.use_beamformer = use_beamformer

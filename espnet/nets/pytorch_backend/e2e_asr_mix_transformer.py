@@ -65,6 +65,11 @@ class E2E(E2EASR, ASRInterface, torch.nn.Module):
             positional_dropout_rate=args.dropout_rate,
             attention_dropout_rate=args.transformer_attn_dropout_rate,
             num_spkrs=args.num_spkrs,
+            attention_type=getattr(args, 'transformer_enc_attn_type', 'self_attn'),
+            max_attn_span=getattr(args, 'enc_max_attn_span', [None]),
+            span_init=getattr(args, 'span_init', None),
+            span_ratio=getattr(args, 'span_ratio', None),
+            ratio_adaptive=getattr(args, 'ratio_adaptive', None)
         )
 
         if args.mtlalpha > 0.0:

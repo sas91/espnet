@@ -89,7 +89,7 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
         max_attn_span=[None],
         span_init=0,
         span_ratio=0.5,
-        ratio_adaptive=False),
+        ratio_adaptive=False
     ):
         """Construct an Decoder object."""
         torch.nn.Module.__init__(self)
@@ -121,7 +121,7 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
                 lambda lnum: DecoderLayer(
                     attention_dim,
                     multi_headed_attention(attention_heads, attention_dim, self_attention_dropout_rate,
-                                           attention_type, max_span=max_attn_span[min(len(max_attn_span)-1, idx)],
+                                           attention_type, max_span=max_attn_span[min(len(max_attn_span)-1, lnum)],
                                            span_init=span_init, span_ratio=span_ratio, ratio_adaptive=ratio_adaptive,
                                            causal_flag=True),
                     MultiHeadedAttention(

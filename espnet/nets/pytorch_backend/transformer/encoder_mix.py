@@ -10,6 +10,7 @@ import torch
 
 from espnet.nets.pytorch_backend.transducer.vgg import VGG2L
 from espnet.nets.pytorch_backend.transformer.attention import MultiHeadedAttention
+from espnet.nets.pytorch_backend.transformer.attention import multi_headed_attention
 from espnet.nets.pytorch_backend.transformer.embedding import PositionalEncoding
 from espnet.nets.pytorch_backend.transformer.encoder import Encoder
 from espnet.nets.pytorch_backend.transformer.encoder_layer import EncoderLayer
@@ -59,6 +60,11 @@ class EncoderMix(Encoder, torch.nn.Module):
         positionwise_conv_kernel_size=1,
         padding_idx=-1,
         num_spkrs=2,
+        attention_type="self_attn",
+        max_attn_span=None,
+        span_init=0,
+        span_ratio=0.5,
+        ratio_adaptive=False
     ):
         """Construct an Encoder object."""
         super(EncoderMix, self).__init__(
@@ -78,6 +84,11 @@ class EncoderMix(Encoder, torch.nn.Module):
             positionwise_layer_type=positionwise_layer_type,
             positionwise_conv_kernel_size=positionwise_conv_kernel_size,
             padding_idx=padding_idx,
+            attention_type=attention_type,
+            max_attn_span=max_attn_span,
+            span_init=span_init,
+            span_ratio=span_ratio,
+            ratio_adaptive=ratio_adaptive,
         )
         positionwise_layer, positionwise_layer_args = self.get_positionwise_layer(
             positionwise_layer_type,
@@ -93,9 +104,9 @@ class EncoderMix(Encoder, torch.nn.Module):
                     num_blocks_sd,
                     lambda lnum: EncoderLayer(
                         attention_dim,
-                        MultiHeadedAttention(
-                            attention_heads, attention_dim, attention_dropout_rate
-                        ),
+                        multi_headed_attention(attention_heads, attention_dim, attention_dropout_rate,
+                                               attention_type, max_span=max_attn_span[min(len(max_attn_span)-1, lnum)],
+                                               span_init=span_init, span_ratio=span_ratio, ratio_adaptive=ratio_adaptive),
                         positionwise_layer(*positionwise_layer_args),
                         dropout_rate,
                         normalize_before,
