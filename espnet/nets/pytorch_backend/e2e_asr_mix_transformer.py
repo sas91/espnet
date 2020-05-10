@@ -193,6 +193,25 @@ class E2E(E2EASR, ASRInterface, torch.nn.Module):
             loss_att_data = float(loss_att)
             loss_ctc_data = float(loss_ctc)
 
+        loss_span = 0
+        if self.attention_enc_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_dynamic_span2']:
+            loss_span += sum([layer.self_attn.get_mean_span() for layer in self.encoder.encoders])
+        if self.attention_dec_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_dynamic_span2']:
+            loss_span += sum([layer.self_attn.get_mean_span() for layer in self.decoder.decoders])
+        # xkc09 Span attention ratio loss computation
+        loss_ratio = 0
+        if self.ratio_adaptive:
+            # target_ratio = 0.5
+            if self.attention_enc_type in ['self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2']:
+                loss_ratio += sum([1 - layer.self_attn.get_mean_ratio() 
+                                for layer in self.encoder.encoders])
+            if self.attention_dec_type in ['self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2']:
+                loss_ratio += sum([1 - layer.self_attn.get_mean_ratio()
+                                for layer in self.decoder.decoders])
+        if (self.attention_enc_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2'] or self.attention_dec_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2']):
+            if getattr(self, 'span_loss_coef', None):
+                self.loss += (loss_span + loss_ratio) * self.span_loss_coef
+
         loss_data = float(self.loss)
         if loss_data < CTC_LOSS_THRESHOLD and not math.isnan(loss_data):
             self.reporter.report(

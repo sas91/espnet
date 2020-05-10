@@ -37,6 +37,7 @@ lm_resume=          # specify a snapshot file to resume LM training
 lmtag=              # tag for managing LMs
 
 # decoding parameter
+n_average=10 # use 1 for RNN models
 recog_model=model.acc.best # set a model to be used for decoding: 'model.acc.best' or 'model.loss.best'
 
 # data
@@ -64,7 +65,7 @@ set -o pipefail
 
 train_set="tr"
 train_dev="cv"
-recog_set="tt"
+recog_set="tt cv"
 
 if [ ${stage} -le 0 ]; then
     ### Task dependent. You have to make data the following preparation part by yourself.
@@ -267,6 +268,11 @@ fi
 if [ ${stage} -le 5 ]; then
     echo "stage 5: Decoding"
     nj=32
+    recog_model=model.last${n_average}.avg.best
+    average_checkpoints.py --backend ${backend} \
+                           --snapshots ${expdir}/results/snapshot.ep.* \
+                           --out ${expdir}/results/${recog_model} \
+                           --num ${n_average}
 
     pids=() # initialize pids
     for rtask in ${recog_set}; do
