@@ -99,6 +99,9 @@ class E2E(E2EASR, ASRInterface, torch.nn.Module):
         if self.attention_enc_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2']:
             for layer in self.encoder.encoders:
                 layer.self_attn.clamp_param()
+            for ns in range(self.num_spkrs):
+                for layer in self.encoder.encoders_sd[ns]:
+                    layer.self_attn.clamp_param()
         if self.attention_dec_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2']:
             for layer in self.decoder.decoders:
                 layer.self_attn.clamp_param()
@@ -203,6 +206,8 @@ class E2E(E2EASR, ASRInterface, torch.nn.Module):
         loss_span = 0
         if self.attention_enc_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_dynamic_span2']:
             loss_span += sum([layer.self_attn.get_mean_span() for layer in self.encoder.encoders])
+            for ns in range(self.num_spkrs):
+                loss_span += sum([layer.self_attn.get_mean_span() for layer in self.encoder.encoders_sd[ns]])
         if self.attention_dec_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_dynamic_span2']:
             loss_span += sum([layer.self_attn.get_mean_span() for layer in self.decoder.decoders])
         # xkc09 Span attention ratio loss computation
@@ -212,6 +217,9 @@ class E2E(E2EASR, ASRInterface, torch.nn.Module):
             if self.attention_enc_type in ['self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2']:
                 loss_ratio += sum([1 - layer.self_attn.get_mean_ratio() 
                                 for layer in self.encoder.encoders])
+                for ns in range(self.num_spkrs):
+                    loss_ratio += sum([1 - layer.self_attn.get_mean_ratio() 
+                                    for layer in self.encoder.encoders_sd[ns]])
             if self.attention_dec_type in ['self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2']:
                 loss_ratio += sum([1 - layer.self_attn.get_mean_ratio()
                                 for layer in self.decoder.decoders])
