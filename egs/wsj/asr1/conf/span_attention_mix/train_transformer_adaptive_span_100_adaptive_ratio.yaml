@@ -41,7 +41,7 @@ transformer-length-normalized-loss: false
 transformer-init: pytorch
 transformer-enc-attn-type: self_attn_adaptive_span2
 transformer-dec-attn-type: self_attn_adaptive_span2
-enc-max-attn-span: [50]
+enc-max-attn-span: [100]
 dec-max-attn-span: [25]
 span-loss-coef: 0.0000001
 span-init: 0.7

@@ -43,7 +43,7 @@ transformer-enc-attn-type: self_attn_adaptive_span2
 transformer-dec-attn-type: self_attn_adaptive_span2
 enc-max-attn-span: [50]
 dec-max-attn-span: [25]
-span-loss-coef: 0.0000001
+span-loss-coef: 0
 span-init: 0.7
 span-ratio: 0.5
 ratio-adaptive: true

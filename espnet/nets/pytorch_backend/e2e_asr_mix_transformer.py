@@ -96,6 +96,13 @@ class E2E(E2EASR, ASRInterface, torch.nn.Module):
         :return: accuracy in attention decoder
         :rtype: float
         """
+        if self.attention_enc_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2']:
+            for layer in self.encoder.encoders:
+                layer.self_attn.clamp_param()
+        if self.attention_dec_type in ['self_attn_dynamic_span', 'self_attn_adaptive_span', 'self_attn_adaptive_span2', 'self_attn_fixed_span2', 'self_attn_dynamic_span2']:
+            for layer in self.decoder.decoders:
+                layer.self_attn.clamp_param()
+
         # 1. forward encoder
         xs_pad = xs_pad[:, : max(ilens)]  # for data parallel
         src_mask = make_non_pad_mask(ilens.tolist()).to(xs_pad.device).unsqueeze(-2)
