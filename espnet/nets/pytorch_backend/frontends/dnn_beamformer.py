@@ -10,6 +10,8 @@ from espnet.nets.pytorch_backend.frontends.beamformer import (
     get_power_spectral_density_matrix,  # noqa: H301
 )
 from espnet.nets.pytorch_backend.frontends.mask_estimator import MaskEstimator
+from espnet.nets.pytorch_backend.frontends.mask_estimator_transformer \
+    import MaskEstimator as MaskEstimatorTransformer
 from torch_complex.tensor import ComplexTensor
 
 is_torch_1_2_plus = LooseVersion(torch.__version__) >= LooseVersion("1.2.0")

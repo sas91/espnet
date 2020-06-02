@@ -8,8 +8,6 @@ import sys
 
 import numpy as np
 
-from espnet.asr.pytorch_backend.asr import enhance
-
 
 # NOTE: you need this func to generate our sphinx doc
 def get_parser():
@@ -182,7 +180,12 @@ def main(args):
     # recog
     logging.info("backend = " + args.backend)
     if args.backend == "pytorch":
-        enhance(args)
+        if args.num_spkrs == 1:
+            from espnet.asr.pytorch_backend.asr import enhance
+            enhance(args)
+        else:
+            from espnet.asr.pytorch_backend.asr_mix import enhance
+            enhance(args)
     else:
         raise ValueError("Only pytorch is supported.")
 

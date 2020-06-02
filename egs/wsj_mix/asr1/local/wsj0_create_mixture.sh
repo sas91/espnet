@@ -42,20 +42,20 @@ sed -i -e "s=/db/processed/public/WSJ0WAV_full=${wsj_full_wav}=" \
        -e "s='min','max'='max'=" \
        ${dir}/create_wav_2speakers.m
 
-echo "WSJ0 wav file."
+echo "Extracting WSJ0 wav file."
 local/convert2wav.sh ${wsj0_path} ${wsj_full_wav} || exit 1;
 
-echo "Creating Mixtures."
+echo "Creating WSJ0-2mix Mixtures."
 
-matlab_cmd="matlab -nojvm -nodesktop -nodisplay -nosplash -r create_wav_2speakers"
-
-mixfile=${dir}/mix_matlab.sh
-echo "#!/bin/bash" > $mixfile
-echo $matlab_cmd >> $mixfile
-chmod +x $mixfile
+cat << EOF > ${dir}/mix_matlab.sh
+#!/bin/bash
+matlab -nojvm -nodesktop -nodisplay -nosplash -r create_wav_2speakers
+EOF
+chmod +x ${dir}/mix_matlab.sh
 
 # Run Matlab
 cd ${dir}
-$train_cmd ${dir}/mix.log $mixfile
+$train_cmd ${dir}/mix.log \
+  ${dir}/mix_matlab.sh
 
 cd ${rootdir}

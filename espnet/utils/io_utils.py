@@ -240,15 +240,18 @@ class LoadInputsAndTargets(object):
         x_names = list(x_feats_dict.keys())
         if self.load_output:
             if len(y_feats_dict) == 1:
-                ys = [ys[i] for i in nonzero_sorted_idx]
+                ys = [[ys[i] for i in nonzero_sorted_idx]]
             elif len(y_feats_dict) > 1:  # multi-speaker asr mode
-                ys = zip(*[[y[i] for i in nonzero_sorted_idx] for y in ys])
+                ys = [[y[i] for i in nonzero_sorted_idx] for y in ys]
 
-            y_name = list(y_feats_dict.keys())[0]
+            y_names = list(y_feats_dict.keys())
 
             # Keeping x_name and y_name, e.g. input1, for future extension
             return_batch = OrderedDict(
-                [*[(x_name, x) for x_name, x in zip(x_names, xs)], (y_name, ys)]
+                [
+                    *[(x_name, x) for x_name, x in zip(x_names, xs)],
+                    *[(y_name, y) for y_name, y in zip(y_names, ys)],
+                ]
             )
         else:
             return_batch = OrderedDict([(x_name, x) for x_name, x in zip(x_names, xs)])
